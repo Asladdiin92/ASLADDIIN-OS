@@ -98,6 +98,7 @@ the browser bundle or API response.
 | **Recharts** | Draws the status, priority, task type, and timeline charts. |
 | **Lucide React** | Supplies consistent icons for navigation, metrics, actions, and states. |
 | **Notion REST API** | Stores the real planner data and creates, updates, or archives pages in your database. This project calls it with the server's built-in `fetch`; it does not need the Notion SDK. |
+| **Sentry** | Captures unhandled browser, server, and edge errors plus `console.log`, `console.warn`, and `console.error` logs when `NEXT_PUBLIC_SENTRY_DSN` is configured. |
 | **CSS** | Styles the responsive layout, charts, calendar, form, and phone/tablet views. |
 | **MongoDB Atlas** | Stores AI skills and integration state; it is not the planner database. |
 | **GitHub App** | Reads installed repository issues/PRs/reviews/checks and runs confirmed issue/comment/PR actions. |
@@ -658,6 +659,10 @@ environment variables, redeploy or restart the service.
    CLERK_SECRET_KEY=your_clerk_secret_key
    ```
 
+   To enable Sentry, also set `NEXT_PUBLIC_SENTRY_DSN` in Vercel and on Render.
+   Vercel needs it at build time for browser events; Render needs it at runtime
+   for server and edge events.
+
    Use the same Clerk application and matching keys as on Render. Do not add
    the Notion, MongoDB, AI, Google, GitHub, Telegram, or `ALLOWED_EMAILS`
    secrets to Vercel for this arrangement; the API requests are proxied to
@@ -726,6 +731,10 @@ placeholders, not values to copy into production.
   only. Check that your real token is not in a commit before pushing.
 - Never expose the token in a `NEXT_PUBLIC_...` variable, client component, or
   browser request.
+- Sentry receives unhandled application errors and console logs at `log`,
+  `warn`, and `error` levels when `NEXT_PUBLIC_SENTRY_DSN` is configured. Do
+  not log API keys, session tokens, or private planner contents. Session replay
+  is not enabled.
 - `GEMINI_API_KEY` is sent to Google only from the server. Planner task details
   are sent to Gemini when using the assistant; do not use it if you do not want
   that data processed by Google.
@@ -757,6 +766,7 @@ placeholders, not values to copy into production.
 | --- | --- |
 | “Add `NOTION_API_KEY` and `NOTION_DATABASE_ID`...” | Fill both values in `.env.local` and restart `npm run dev`. `NOTION_TOKEN` is also accepted instead of `NOTION_API_KEY`. |
 | Clerk reports missing keys | Set `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` locally and in the Vercel project, then restart or redeploy. |
+| Sentry does not show events | Set `NEXT_PUBLIC_SENTRY_DSN` in Vercel and Render, then rebuild/redeploy both services. |
 | Planner assistant reports a missing Gemini key | Set `GEMINI_API_KEY` in `.env.local` or the Vercel environment, then restart or redeploy. |
 | Google connection setup fails | Set `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and a 32-character `SESSION_SECRET`; ensure both callback URL variables match the URI registered in Google Cloud Console, then redeploy. |
 | Google asks to reauthorize | The stateless Google session expires within one hour. Reconnect from the dashboard; persistent refresh tokens are not stored. |

@@ -1,5 +1,6 @@
 "use client";
 
+import * as Sentry from "@sentry/nextjs";
 import { useEffect } from "react";
 import Link from "next/link";
 import "./globals.css";
@@ -12,6 +13,7 @@ type GlobalErrorProps = {
 export default function GlobalError({ error, reset }: GlobalErrorProps) {
   useEffect(() => {
     console.error("Unexpected dashboard error:", error);
+    Sentry.captureException(error);
   }, [error]);
 
   return (
