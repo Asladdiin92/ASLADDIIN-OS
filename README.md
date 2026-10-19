@@ -98,7 +98,7 @@ the browser bundle or API response.
 | **Recharts** | Draws the status, priority, task type, and timeline charts. |
 | **Lucide React** | Supplies consistent icons for navigation, metrics, actions, and states. |
 | **Notion REST API** | Stores the real planner data and creates, updates, or archives pages in your database. This project calls it with the server's built-in `fetch`; it does not need the Notion SDK. |
-| **Sentry** | Captures unhandled browser, server, and edge errors plus `console.log`, `console.warn`, and `console.error` logs when `NEXT_PUBLIC_SENTRY_DSN` is configured. |
+| **Sentry** | Captures unhandled browser, server, and edge errors, console logs, and sampled performance traces when `NEXT_PUBLIC_SENTRY_DSN` is configured. |
 | **CSS** | Styles the responsive layout, charts, calendar, form, and phone/tablet views. |
 | **MongoDB Atlas** | Stores AI skills and integration state; it is not the planner database. |
 | **GitHub App** | Reads installed repository issues/PRs/reviews/checks and runs confirmed issue/comment/PR actions. |
@@ -733,7 +733,8 @@ placeholders, not values to copy into production.
   browser request.
 - Sentry receives unhandled application errors and console logs at `log`,
   `warn`, and `error` levels when `NEXT_PUBLIC_SENTRY_DSN` is configured. Do
-  not log API keys, session tokens, or private planner contents. Session replay
+  not log API keys, session tokens, or private planner contents. Performance
+  traces are sampled at 100% in development and 10% otherwise. Session replay
   is not enabled.
 - `GEMINI_API_KEY` is sent to Google only from the server. Planner task details
   are sent to Gemini when using the assistant; do not use it if you do not want
