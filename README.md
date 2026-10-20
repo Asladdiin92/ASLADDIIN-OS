@@ -590,11 +590,14 @@ of frontend and backend.
 2. Use these commands:
 
    ```text
-   Build command: npm ci && npm run build
+   Build command: npm ci --include=dev && npm run build
    Start command: npm run start
    ```
 
-   `package.json` defines `build` as `next build` and `start` as `next start`.
+   The build command explicitly includes development dependencies because
+   TypeScript is required by Next.js to load `next.config.ts` and type-check the
+   production build, even when Render sets `NODE_ENV=production`. `package.json`
+   defines `build` as `next build` and `start` as `next start`.
    Choose Node.js **24.x LTS** in Render's runtime settings (or set
    `NODE_VERSION` to the current supported 24.x release). Render supplies the
    listening port through `PORT`; do not add or hard-code a port.
