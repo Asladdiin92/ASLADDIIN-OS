@@ -13,6 +13,7 @@ import {
   ChevronDown,
   Clock3,
   Columns3,
+  Download,
   ExternalLink,
   Flame,
   GitBranch,
@@ -67,7 +68,6 @@ type SidebarNavigationItem = {
   target?: string;
   count?: number;
   badge?: string;
-  disabled?: boolean;
   action?: () => void;
 };
 type SidebarNavigationGroup = { label: string; items: SidebarNavigationItem[] };
@@ -80,7 +80,11 @@ const emptyGoogleSummary: GoogleWorkspaceSummary = {
   events: [],
   files: [],
 };
-const dashboardTabs = ["overview", "planner-assistant", "tasks", "projects", "notes", "calendar", "progress", "integrations"];
+const dashboardTabs = [
+  "overview", "planner-assistant", "tasks", "projects", "notes", "calendar", "progress", "integrations",
+  "goals", "knowledge", "system-activity", "completed-work", "project-progress", "reviews", "ai-observations",
+  "appearance", "notifications", "privacy", "authentication", "ai-preferences", "integration-permissions", "data-controls",
+];
 
 function countBy(tasks: Task[], select: (task: Task) => string) {
   const counts = new Map<string, number>();
@@ -184,19 +188,19 @@ function Sidebar({
         { id: "notes", label: "Notes", icon: StickyNote, target: "notes" },
         { id: "projects", label: "Projects", icon: GitBranch, target: "projects", count: projectCount, badge: "projects-badge" },
         { id: "calendar", label: "Calendar", icon: CalendarDays, target: "calendar", count: meetingCount, badge: "calendar-badge" },
-        { id: "goals", label: "Goals", icon: Target, disabled: true },
-        { id: "knowledge", label: "Knowledge", icon: BookOpen, disabled: true },
+        { id: "goals", label: "Goals", icon: Target, target: "goals" },
+        { id: "knowledge", label: "Knowledge", icon: BookOpen, target: "knowledge" },
       ],
     },
     {
       label: "ACTIVITY & INSIGHTS",
       items: [
         { id: "progress", label: "Productivity trends", icon: Target, target: "progress" },
-        { id: "system-activity", label: "System activity", icon: Clock3, disabled: true },
-        { id: "completed-work", label: "Completed work", icon: CheckCheck, disabled: true },
-        { id: "project-progress", label: "Project progress", icon: GitBranch, disabled: true },
-        { id: "reviews", label: "Weekly and monthly reviews", icon: CalendarDays, disabled: true },
-        { id: "ai-observations", label: "AI-generated observations", icon: Sparkles, disabled: true },
+        { id: "system-activity", label: "System activity", icon: Clock3, target: "system-activity" },
+        { id: "completed-work", label: "Completed work", icon: CheckCheck, target: "completed-work" },
+        { id: "project-progress", label: "Project progress", icon: GitBranch, target: "project-progress" },
+        { id: "reviews", label: "Weekly and monthly reviews", icon: CalendarDays, target: "reviews" },
+        { id: "ai-observations", label: "AI-generated observations", icon: Sparkles, target: "ai-observations" },
       ],
     },
     {
@@ -209,13 +213,13 @@ function Sidebar({
       label: "SETTINGS",
       items: [
         { id: "profile", label: "Profile", icon: UserRound, action: () => clerk.openUserProfile() },
-        { id: "appearance", label: "Appearance", icon: Columns3, disabled: true },
-        { id: "notifications", label: "Notifications", icon: CircleAlert, disabled: true },
-        { id: "privacy", label: "Privacy", icon: CircleAlert, disabled: true },
-        { id: "authentication", label: "Authentication", icon: Check, disabled: true },
-        { id: "ai-preferences", label: "AI preferences", icon: Sparkles, disabled: true },
-        { id: "integration-permissions", label: "Integration permissions", icon: Columns3, disabled: true },
-        { id: "data-controls", label: "Data export and deletion", icon: Trash2, disabled: true },
+        { id: "appearance", label: "Appearance", icon: Columns3, target: "appearance" },
+        { id: "notifications", label: "Notifications", icon: CircleAlert, target: "notifications" },
+        { id: "privacy", label: "Privacy", icon: CircleAlert, target: "privacy" },
+        { id: "authentication", label: "Authentication", icon: Check, target: "authentication" },
+        { id: "ai-preferences", label: "AI preferences", icon: Sparkles, target: "ai-preferences" },
+        { id: "integration-permissions", label: "Integration permissions", icon: Columns3, target: "integration-permissions" },
+        { id: "data-controls", label: "Data export and deletion", icon: Trash2, target: "data-controls" },
       ],
     },
   ];
@@ -234,17 +238,16 @@ function Sidebar({
           <section className="nav-group" aria-label={group.label} key={group.label}>
             <h2 className="nav-group-label">{group.label}</h2>
             <div className="nav-group-items">
-              {group.items.map(({ id, label, icon: Icon, target, count, badge, disabled, action }) => {
+              {group.items.map(({ id, label, icon: Icon, target, count, badge, action }) => {
                 const isActive = target !== undefined && activeTarget === target;
                 return (
                   <button
                     id={`nav-${id}`}
                     type="button"
-                    className={`nav-link${isActive ? " active" : ""}${disabled ? " nav-link-disabled" : ""}`}
+                    className={`nav-link${isActive ? " active" : ""}`}
                     aria-current={isActive ? "page" : undefined}
-                    aria-label={disabled ? `${label}, coming soon` : label}
-                    title={disabled ? `${group.label}: ${label} — Coming soon` : `${group.label}: ${label}`}
-                    disabled={disabled}
+                    aria-label={label}
+                    title={`${group.label}: ${label}`}
                     key={id}
                     onClick={() => {
                       if (target) onSelectTarget(target);
@@ -255,7 +258,6 @@ function Sidebar({
                     <Icon size={16} strokeWidth={1.8} />
                     <span>{label}</span>
                     {count !== undefined && count > 0 && <span className={`nav-badge ${badge}`}>{count}</span>}
-                    {disabled && <span className="nav-coming-soon">Soon</span>}
                   </button>
                 );
               })}
@@ -739,6 +741,7 @@ function TaskTable({ tasks, options, loading, search, onSearch, onCreate, onEdit
 }
 
 export default function DashboardPage() {
+  const clerk = useClerk();
   const { isLoaded, user } = useUser();
   const hasAccess = Boolean(user);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -1042,8 +1045,89 @@ export default function DashboardPage() {
     progress: "Activity & Insights",
     "planner-assistant": "AI Assistant",
     integrations: "Integrations",
+    goals: "Goals",
+    knowledge: "Knowledge",
+    "system-activity": "System activity",
+    "completed-work": "Completed work",
+    "project-progress": "Project progress",
+    reviews: "Weekly and monthly reviews",
+    "ai-observations": "AI-generated observations",
+    appearance: "Appearance",
+    notifications: "Notifications",
+    privacy: "Privacy",
+    authentication: "Authentication",
+    "ai-preferences": "AI preferences",
+    "integration-permissions": "Integration permissions",
+    "data-controls": "Data export and deletion",
   };
   const activeTabLabel = tabLabels[activeTab] ?? "Dashboard";
+  const settingsPages: Record<string, { title: string; description: string; detail: string; actionLabel: string; actionTarget: string }> = {
+    appearance: {
+      title: "Appearance",
+      description: "The workspace currently uses its standard responsive theme.",
+      detail: "Theme customization is not available yet; this page does not store a preference that the app cannot apply.",
+      actionLabel: "Return to dashboard",
+      actionTarget: "overview",
+    },
+    notifications: {
+      title: "Notifications",
+      description: "Dashboard notices appear in the app, and Telegram can send counts-only refresh summaries when configured.",
+      detail: "Telegram does not receive task titles, notes, email, or calendar details. Manage its connection from Integrations.",
+      actionLabel: "Manage integrations",
+      actionTarget: "integrations",
+    },
+    privacy: {
+      title: "Privacy",
+      description: "Your Notion database remains the source of truth for planner tasks.",
+      detail: "MongoDB stores AI and integration metadata. Connected Google data is only used by on-demand features; review or revoke provider connections in Integrations.",
+      actionLabel: "Review integrations",
+      actionTarget: "integrations",
+    },
+    authentication: {
+      title: "Authentication",
+      description: "Clerk manages your sign-in session and account security.",
+      detail: "Open your Clerk account profile to manage account details and security options.",
+      actionLabel: "Manage Clerk account",
+      actionTarget: "profile",
+    },
+    "ai-preferences": {
+      title: "AI preferences",
+      description: "The assistant can summarize planner context and help prepare next steps.",
+      detail: "AI-generated changes are proposals; writing or editing planner items still requires your confirmation.",
+      actionLabel: "Open AI Assistant",
+      actionTarget: "planner-assistant",
+    },
+    "integration-permissions": {
+      title: "Integration permissions",
+      description: "Review connected providers and revoke access from their integration cards.",
+      detail: "The Integrations page shows connection status and the available disconnect or account-link actions.",
+      actionLabel: "Open Integrations",
+      actionTarget: "integrations",
+    },
+    "data-controls": {
+      title: "Data export and deletion",
+      description: "Download the planner tasks currently loaded from your Notion database.",
+      detail: "This export contains planner task data only. Deletion is not performed here; manage planner records in Notion and revoke app connections from Integrations.",
+      actionLabel: "Manage integrations",
+      actionTarget: "integrations",
+    },
+  };
+  const settingsPage = settingsPages[activeTab];
+
+  function downloadPlannerExport() {
+    const exportData = {
+      exportedAt: new Date().toISOString(),
+      source: "ASLADDIIN OS",
+      tasks,
+    };
+    const file = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(file);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `aslad-diin-os-planner-${today}.json`;
+    anchor.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
 
   if (!isLoaded) {
     return <main className="auth-page"><LoaderCircle size={20} className="spin" /><span>Checking your access…</span></main>;
@@ -1303,6 +1387,133 @@ export default function DashboardPage() {
           <div className={`tab-content${activeTab === "notes" ? " is-active" : ""}`} id="notes-tab" role="region" aria-labelledby="nav-notes" aria-hidden={activeTab !== "notes"}>
             <NotesPanel tasks={tasks} />
           </div>
+
+          {activeTab === "goals" && (
+            <div className="tab-content is-active" id="goals-tab" role="region" aria-labelledby="nav-goals">
+              <div className="section-heading">
+                <div><h2>Goals</h2><p>Track progress using the areas and tasks already in your Notion planner.</p></div>
+                <button type="button" className="refresh-button" onClick={() => selectTab("projects")}>View project progress</button>
+              </div>
+              <section className="panel areas-panel">
+                <div className="panel-heading"><div><h3>Progress by area</h3><p>Current goal progress is estimated from completed planner tasks.</p></div><Target size={16} className="panel-title-icon" /></div>
+                <div className="area-list">
+                  {areaData.map((area, index) => (
+                    <div className="area-row" key={area.name}>
+                      <div className="area-topline"><span className={`area-color area-color-${index}`} /><strong>{area.name}</strong><span className="area-task-count">{area.completed}/{area.value}</span><b>{area.percentage}%</b></div>
+                      <div className="area-progress"><span className={`area-progress-${index}`} style={{ width: `${area.percentage}%` }} /></div>
+                    </div>
+                  ))}
+                  {state === "ready" && areaData.length === 0 && <div className="chart-empty area-empty">Add an Area to your Notion tasks to see goal progress here.</div>}
+                  {state === "loading" && areaData.length === 0 && <div className="area-placeholder"><span /><span /><span /></div>}
+                  {state === "error" && <p className="course-progress-empty">{error}</p>}
+                </div>
+                <div className="area-summary"><span><span className="summary-dot" />{areaData.length} tracked areas</span><span>{metrics.completion}% overall task completion</span></div>
+              </section>
+            </div>
+          )}
+
+          {activeTab === "knowledge" && (
+            <div className="tab-content is-active" id="knowledge-tab" role="region" aria-labelledby="nav-knowledge">
+              <NotesPanel tasks={tasks} />
+            </div>
+          )}
+
+          {activeTab === "system-activity" && (
+            <div className="tab-content is-active" id="system-activity-tab" role="region" aria-labelledby="nav-system-activity">
+              <div className="section-heading"><div><h2>System activity</h2><p>Recent changes and completed actions in your workspace.</p></div></div>
+              <RecentActivityTimeline refreshKey={`${dashboardRefreshKey}:${activityRefreshKey}:system`} onNavigate={selectTab} />
+            </div>
+          )}
+
+          {activeTab === "completed-work" && (
+            <div className="tab-content is-active" id="completed-work-tab" role="region" aria-labelledby="nav-completed-work">
+              <div className="section-heading"><div><h2>Completed work</h2><p>{metrics.completed} completed planner item{metrics.completed === 1 ? "" : "s"} from your Notion database.</p></div></div>
+              <TaskTable tasks={tasks.filter((task) => task.completed)} options={taskOptions} loading={state === "loading"} search={search} onSearch={setSearch}
+                onCreate={() => { setEditingTask(null); setCreateDialogOpen(true); }}
+                onEdit={(task) => { setCreateDialogOpen(false); setEditingTask(task); }}
+                onComplete={(task) => void handleTaskComplete(task)}
+                onBreakdown={(task) => { setTaskToBreakDown(task); selectTab("planner-assistant"); }}
+                onDelete={(task) => setArchiveTask(task)}
+                createDisabled={state !== "ready" || !taskOptions} deleting={Boolean(deletingTaskId)} completingId={completingTaskId} />
+            </div>
+          )}
+
+          {activeTab === "project-progress" && (
+            <div className="tab-content is-active" id="project-progress-tab" role="region" aria-labelledby="nav-project-progress">
+              <div className="section-heading"><div><h2>Project progress</h2><p>Completion summaries based on the areas represented in your planner.</p></div>
+                <button type="button" className="refresh-button" onClick={() => selectTab("projects")}>Open projects</button>
+              </div>
+              <section className="panel areas-panel">
+                <div className="panel-heading"><div><h3>Active areas</h3><p>Completed items compared with total planner items.</p></div><GitBranch size={16} className="panel-title-icon" /></div>
+                <div className="area-list">
+                  {areaData.map((area, index) => (
+                    <div className="area-row" key={area.name}>
+                      <div className="area-topline"><span className={`area-color area-color-${index}`} /><strong>{area.name}</strong><span className="area-task-count">{area.completed}/{area.value}</span><b>{area.percentage}%</b></div>
+                      <div className="area-progress"><span className={`area-progress-${index}`} style={{ width: `${area.percentage}%` }} /></div>
+                    </div>
+                  ))}
+                  {state === "ready" && areaData.length === 0 && <div className="chart-empty area-empty">Add an Area to your Notion tasks to see project progress.</div>}
+                  {state === "loading" && areaData.length === 0 && <div className="area-placeholder"><span /><span /><span /></div>}
+                  {state === "error" && <p className="course-progress-empty">{error}</p>}
+                </div>
+                <div className="area-summary"><span><span className="summary-dot" />{areaData.length} active areas</span><span>{metrics.completion}% overall task completion</span></div>
+              </section>
+            </div>
+          )}
+
+          {activeTab === "reviews" && (
+            <div className="tab-content is-active" id="reviews-tab" role="region" aria-labelledby="nav-reviews">
+              <div className="section-heading"><div><h2>Weekly and monthly reviews</h2><p>Review dates recorded on incomplete planner items.</p></div></div>
+              <section className="panel progress-detail-card">
+                <div className="panel-heading"><div><h3>Upcoming reviews</h3><p>Scheduled next review dates, ordered by date.</p></div><CalendarDays size={15} className="panel-title-icon" /></div>
+                <div className="review-progress-list">
+                  {upcomingReviews.map((task) => <a href={task.url} target="_blank" rel="noreferrer" key={task.id}><time>{formatDate(task.nextReviewDate!)}</time><span>{task.title}</span><ExternalLink size={12} /></a>)}
+                  {state === "ready" && upcomingReviews.length === 0 && <p className="course-progress-empty">No upcoming reviews are scheduled. Add a Next Review Date to a planner item to see it here.</p>}
+                  {state === "loading" && <p className="course-progress-empty">Loading review dates…</p>}
+                  {state === "error" && <p className="course-progress-empty">{error}</p>}
+                </div>
+              </section>
+            </div>
+          )}
+
+          {activeTab === "ai-observations" && (
+            <div className="tab-content is-active" id="ai-observations-tab" role="region" aria-labelledby="nav-ai-observations">
+              <div className="section-heading"><div><h2>AI-generated observations</h2><p>Use the existing briefing and assistant to turn planner context into practical next steps.</p></div></div>
+              <section className="panel progress-detail-card">
+                <div className="panel-heading"><div><h3>Current workspace snapshot</h3><p>These counts come directly from the tasks currently loaded from Notion.</p></div><Sparkles size={15} className="panel-title-icon" /></div>
+                <div className="hours-comparison">
+                  <div><span>Incomplete</span><strong>{metrics.pending}</strong></div>
+                  <div><span>Overdue</span><strong className={metrics.overdue ? "overdue-value" : ""}>{metrics.overdue}</strong></div>
+                  <div><span>Completed</span><strong>{metrics.completed}</strong></div>
+                </div>
+                <p className="course-progress-empty">The AI daily briefing is available on the Dashboard. Ask the AI Assistant to summarize notes, plan your day, or break a project into steps.</p>
+                <div className="google-workspace-actions">
+                  <button type="button" className="refresh-button" onClick={() => selectTab("overview")}>Open dashboard briefing</button>
+                  <button type="button" className="refresh-button" onClick={() => selectTab("planner-assistant")}>Open AI Assistant</button>
+                </div>
+              </section>
+            </div>
+          )}
+
+          {settingsPage && (
+            <div className="tab-content is-active" id={`${activeTab}-tab`} role="region" aria-labelledby={`nav-${activeTab}`}>
+              <div className="section-heading"><div><h2>{settingsPage.title}</h2><p>{settingsPage.description}</p></div></div>
+              <section className="panel progress-detail-card">
+                <div className="panel-heading"><div><h3>{settingsPage.title} controls</h3><p>{settingsPage.detail}</p></div></div>
+                <div className="google-workspace-actions">
+                  {activeTab === "data-controls" && (
+                    <button type="button" className="refresh-button" onClick={downloadPlannerExport} disabled={state !== "ready"}>
+                      <Download size={13} />Export planner data
+                    </button>
+                  )}
+                  <button type="button" className="refresh-button" onClick={() => {
+                    if (settingsPage.actionTarget === "profile") clerk.openUserProfile();
+                    else selectTab(settingsPage.actionTarget);
+                  }}>{settingsPage.actionLabel}</button>
+                </div>
+              </section>
+            </div>
+          )}
 
           <footer className="page-footer"><span>Made for a more focused day</span><span><i /> Connected securely to your Notion database <span className="footer-separator">·</span> {tasks.length} planner items</span></footer>
         </div>

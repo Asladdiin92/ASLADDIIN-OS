@@ -893,7 +893,6 @@ body::before { position: fixed; z-index: -1; inset: 0; background: radial-gradie
 .sidebar .nav-link:disabled { cursor: not-allowed; opacity: .58; }
 .sidebar .nav-link:disabled:hover { transform: none; border-color: transparent; background: transparent; color: #91a99e; }
 .sidebar .nav-link:disabled:hover svg { transform: none; color: #7caa98; }
-.nav-coming-soon { margin-left: auto; color: #708a7d; font: 7px var(--font-mono); letter-spacing: .3px; text-transform: uppercase; }
 .sidebar .nav-link.active { border-color: #33f0b13b; background: linear-gradient(105deg, #13d99025, #03b6d51a); color: #cbffe7; box-shadow: inset 2px 0 #26f4a5, 0 0 22px #10db9c18; }
 .sidebar .nav-link.active svg { color: #42f9b2; }
 .sidebar .nav-badge { font-family: var(--font-mono); }
