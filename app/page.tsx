@@ -1,6 +1,6 @@
 "use client";
 
-import { useUser, UserButton } from "@clerk/nextjs";
+import { useClerk, useUser, UserButton } from "@clerk/nextjs";
 import {
   AlertTriangle,
   BookOpen,
@@ -30,6 +30,7 @@ import {
   Target,
   Terminal,
   Trash2,
+  UserRound,
 } from "lucide-react";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
@@ -59,6 +60,17 @@ import {
 
 type LoadState = "loading" | "ready" | "error";
 type TaskMutationResponse = { ok: boolean; task?: Task; error?: string };
+type SidebarNavigationItem = {
+  id: string;
+  label: string;
+  icon: LucideIcon;
+  target?: string;
+  count?: number;
+  badge?: string;
+  disabled?: boolean;
+  action?: () => void;
+};
+type SidebarNavigationGroup = { label: string; items: SidebarNavigationItem[] };
 
 const isoToday = todayInPlannerTimeZone;
 const emptyGoogleSummary: GoogleWorkspaceSummary = {
@@ -68,7 +80,7 @@ const emptyGoogleSummary: GoogleWorkspaceSummary = {
   events: [],
   files: [],
 };
-const dashboardTabs = ["overview", "tasks", "projects", "notes", "calendar", "progress", "planner-assistant"];
+const dashboardTabs = ["overview", "planner-assistant", "tasks", "projects", "notes", "calendar", "progress", "integrations"];
 
 function countBy(tasks: Task[], select: (task: Task) => string) {
   const counts = new Map<string, number>();
@@ -156,14 +168,56 @@ function Sidebar({
   projectCount: number;
   meetingCount: number;
 }) {
-  const navigation: Array<{ label: string; icon: LucideIcon; target: string; panel: string; count?: number; badge?: string }> = [
-    { label: "Home", icon: LayoutDashboard, target: "overview", panel: "overview-tab" },
-    { label: "Tasks", icon: ListChecks, target: "tasks", panel: "tasks-tab", count: taskCount, badge: "tasks-badge" },
-    { label: "Projects", icon: GitBranch, target: "projects", panel: "projects-tab", count: projectCount, badge: "projects-badge" },
-    { label: "Notes", icon: StickyNote, target: "notes", panel: "notes-tab" },
-    { label: "Calendar", icon: CalendarDays, target: "calendar", panel: "calendar-tab", count: meetingCount, badge: "calendar-badge" },
-    { label: "Analytics", icon: Target, target: "progress", panel: "progress-tab" },
-    { label: "AI Assistant", icon: Sparkles, target: "planner-assistant", panel: "ai-assistant-tab" },
+  const clerk = useClerk();
+  const navigationGroups: SidebarNavigationGroup[] = [
+    {
+      label: "MAIN",
+      items: [
+        { id: "overview", label: "Dashboard", icon: LayoutDashboard, target: "overview" },
+        { id: "planner-assistant", label: "AI Assistant", icon: Sparkles, target: "planner-assistant" },
+      ],
+    },
+    {
+      label: "WORKSPACE",
+      items: [
+        { id: "tasks", label: "Tasks", icon: ListChecks, target: "tasks", count: taskCount, badge: "tasks-badge" },
+        { id: "notes", label: "Notes", icon: StickyNote, target: "notes" },
+        { id: "projects", label: "Projects", icon: GitBranch, target: "projects", count: projectCount, badge: "projects-badge" },
+        { id: "calendar", label: "Calendar", icon: CalendarDays, target: "calendar", count: meetingCount, badge: "calendar-badge" },
+        { id: "goals", label: "Goals", icon: Target, disabled: true },
+        { id: "knowledge", label: "Knowledge", icon: BookOpen, disabled: true },
+      ],
+    },
+    {
+      label: "ACTIVITY & INSIGHTS",
+      items: [
+        { id: "progress", label: "Productivity trends", icon: Target, target: "progress" },
+        { id: "system-activity", label: "System activity", icon: Clock3, disabled: true },
+        { id: "completed-work", label: "Completed work", icon: CheckCheck, disabled: true },
+        { id: "project-progress", label: "Project progress", icon: GitBranch, disabled: true },
+        { id: "reviews", label: "Weekly and monthly reviews", icon: CalendarDays, disabled: true },
+        { id: "ai-observations", label: "AI-generated observations", icon: Sparkles, disabled: true },
+      ],
+    },
+    {
+      label: "INTEGRATIONS",
+      items: [
+        { id: "integrations", label: "Integrations", icon: Columns3, target: "integrations" },
+      ],
+    },
+    {
+      label: "SETTINGS",
+      items: [
+        { id: "profile", label: "Profile", icon: UserRound, action: () => clerk.openUserProfile() },
+        { id: "appearance", label: "Appearance", icon: Columns3, disabled: true },
+        { id: "notifications", label: "Notifications", icon: CircleAlert, disabled: true },
+        { id: "privacy", label: "Privacy", icon: CircleAlert, disabled: true },
+        { id: "authentication", label: "Authentication", icon: Check, disabled: true },
+        { id: "ai-preferences", label: "AI preferences", icon: Sparkles, disabled: true },
+        { id: "integration-permissions", label: "Integration permissions", icon: Columns3, disabled: true },
+        { id: "data-controls", label: "Data export and deletion", icon: Trash2, disabled: true },
+      ],
+    },
   ];
   return (
     <aside className="sidebar">
@@ -173,30 +227,43 @@ function Sidebar({
         onClose?.();
       }}>
         <span className="brand-mark"><Terminal size={17} strokeWidth={2.2} /></span>
-        <span className="brand-copy"><strong>ASLADIN</strong><small>Command v2.4</small></span>
+        <span className="brand-copy"><strong>ASLADDIIN OS</strong><small>Productivity platform</small></span>
       </a>
-      <div className="sidebar-label">WORKSPACE</div>
-      <nav className="sidebar-nav" role="tablist" aria-label="Main navigation" aria-orientation="vertical">
-        {navigation.map(({ label, icon: Icon, target, panel, count, badge }) => (
-          <button id={`nav-${target}`} type="button" role="tab" aria-selected={activeTarget === target} aria-controls={panel} tabIndex={activeTarget === target ? 0 : -1}
-            className={`nav-link${activeTarget === target ? " active" : ""}`} onKeyDown={(event) => {
-              if (!["ArrowDown", "ArrowRight", "ArrowUp", "ArrowLeft"].includes(event.key)) return;
-              event.preventDefault();
-              const currentIndex = navigation.findIndex((item) => item.target === target);
-              const direction = event.key === "ArrowDown" || event.key === "ArrowRight" ? 1 : -1;
-              const next = navigation[(currentIndex + direction + navigation.length) % navigation.length];
-              onSelectTarget(next.target);
-              document.getElementById(`nav-${next.target}`)?.focus();
-            }} onClick={() => {
-            onSelectTarget(target);
-            onClose?.();
-          }} key={label}>
-            <Icon size={16} strokeWidth={1.8} /><span>{label}</span>
-            {count !== undefined && count > 0 && <span className={`nav-badge ${badge}`}>{count}</span>}
-          </button>
+      <nav className="sidebar-nav" aria-label="Main navigation">
+        {navigationGroups.map((group) => (
+          <section className="nav-group" aria-label={group.label} key={group.label}>
+            <h2 className="nav-group-label">{group.label}</h2>
+            <div className="nav-group-items">
+              {group.items.map(({ id, label, icon: Icon, target, count, badge, disabled, action }) => {
+                const isActive = target !== undefined && activeTarget === target;
+                return (
+                  <button
+                    id={`nav-${id}`}
+                    type="button"
+                    className={`nav-link${isActive ? " active" : ""}${disabled ? " nav-link-disabled" : ""}`}
+                    aria-current={isActive ? "page" : undefined}
+                    aria-label={disabled ? `${label}, coming soon` : label}
+                    title={disabled ? `${group.label}: ${label} — Coming soon` : `${group.label}: ${label}`}
+                    disabled={disabled}
+                    key={id}
+                    onClick={() => {
+                      if (target) onSelectTarget(target);
+                      action?.();
+                      onClose?.();
+                    }}
+                  >
+                    <Icon size={16} strokeWidth={1.8} />
+                    <span>{label}</span>
+                    {count !== undefined && count > 0 && <span className={`nav-badge ${badge}`}>{count}</span>}
+                    {disabled && <span className="nav-coming-soon">Soon</span>}
+                  </button>
+                );
+              })}
+            </div>
+          </section>
         ))}
       </nav>
-      <div className="sidebar-label projects-label">CONNECTED WORKSPACE</div>
+      <div className="sidebar-label projects-label">PLANNER DATABASE</div>
       <div className="database-link"><span className="database-icon"><BookOpen size={14} /></span><span>Academic &amp; Life Planner</span></div>
       <div className="sidebar-bottom">
         <div className="notion-status"><span className="status-indicator" /><span>Powered by your Notion database</span></div>
@@ -967,15 +1034,16 @@ export default function DashboardPage() {
     .reduce((sum, task) => sum + (task.estimatedHours ?? 0), 0);
   const greeting = new Intl.DateTimeFormat("en", { weekday: "long", month: "long", day: "numeric", timeZone: PLANNER_TIME_ZONE }).format(new Date());
   const tabLabels: Record<string, string> = {
-    overview: "Home",
+    overview: "Dashboard",
     tasks: "Tasks",
     projects: "Projects",
     notes: "Notes",
     calendar: "Calendar",
-    progress: "Analytics",
+    progress: "Activity & Insights",
     "planner-assistant": "AI Assistant",
+    integrations: "Integrations",
   };
-  const activeTabLabel = tabLabels[activeTab] ?? "Home";
+  const activeTabLabel = tabLabels[activeTab] ?? "Dashboard";
 
   if (!isLoaded) {
     return <main className="auth-page"><LoaderCircle size={20} className="spin" /><span>Checking your access…</span></main>;
@@ -999,7 +1067,7 @@ export default function DashboardPage() {
       <main className="main-content">
         <header className="topbar">
           <button className="mobile-menu round-button" aria-label="Open navigation" onClick={() => setSidebarOpen(true)}><Menu size={18} /></button>
-          <div className="breadcrumbs"><span>ASLADIN</span><span>/</span><strong>{activeTabLabel}</strong></div>
+          <div className="breadcrumbs"><span>ASLADDIIN OS</span><span>/</span><strong>{activeTabLabel}</strong></div>
           <div className="topbar-right">
             <span className="updated-label">{lastUpdated ? `Updated at ${lastUpdated}` : "Live from Notion"}</span>
             <span className={`connection-label ${state === "ready" ? "connected" : state === "error" ? "disconnected" : ""}`}><i />{state === "ready" ? "Connected" : state === "error" ? "Not connected" : "Connecting"}</span>
@@ -1008,7 +1076,7 @@ export default function DashboardPage() {
         </header>
 
         <div className="page-wrap">
-          <div className={`tab-content${activeTab === "overview" ? " is-active" : ""}`} id="overview-tab" role="tabpanel" aria-labelledby="nav-overview" aria-hidden={activeTab !== "overview"}>
+          <div className={`tab-content${activeTab === "overview" ? " is-active" : ""}`} id="overview-tab" role="region" aria-labelledby="nav-overview" aria-hidden={activeTab !== "overview"}>
           <section className="welcome-row command-center-banner">
             <div className="command-center-copy">
               <h1>Good morning, {user?.firstName || "Asladin"}</h1>
@@ -1103,37 +1171,53 @@ export default function DashboardPage() {
             />
           </section>
 
-          <details className="integration-compact">
-            <summary>
-              <span className="integration-summary-title">Integrations</span>
-              <span className="integration-summary-status">{googleSummary.connected ? "Google connected" : "Google not connected"} · GitHub · Telegram</span>
-              <span className="integration-summary-toggle">Manage</span>
-            </summary>
-            <section className="panel google-workspace-panel" aria-labelledby="google-workspace-title">
-              <div className="panel-heading google-workspace-heading">
-                <div><h2 id="google-workspace-title">Google Workspace</h2><p>{googleSummary.connected ? `Connected as ${googleSummary.email}` : "Connect Gmail, Calendar, and Drive for an on-demand AI briefing."}</p></div>
-                <div className="google-workspace-actions">
-                  {googleSummary.connected
-                    ? <button type="button" className="refresh-button" onClick={() => void loadGoogleSummary(true)} disabled={googleLoading}>{googleLoading ? "Refreshing..." : "Refresh"}</button>
-                    : <a className="google-connect-button" href="/api/google/connect">Connect Google</a>}
-                  {googleSummary.connected && <button type="button" className="google-disconnect-button" onClick={() => void handleGoogleDisconnect()}>Disconnect</button>}
-                </div>
-              </div>
-              {googleError && <p className="google-workspace-error" role="alert">{googleError}</p>}
-              {googleSummary.connected && <>
-                <div className="google-workspace-counts"><span><strong>{googleSummary.unreadEmails}</strong> unread emails</span><span><strong>{meetingsToday}</strong> meetings today</span><span><strong>{googleSummary.files.length}</strong> recent Drive files</span></div>
-                <div className="google-workspace-data">
-                  <div><h3>Unread email</h3>{googleSummary.messages.slice(0, 3).map((message) => <article key={message.id}><strong>{message.subject}</strong><span>{message.from}</span><p>{message.snippet}</p></article>)}{googleSummary.messages.length === 0 && <p className="google-workspace-empty">No unread messages found.</p>}</div>
-                  <div><h3>Upcoming calendar</h3>{googleSummary.events.slice(0, 4).map((event) => <a key={event.id} href={event.link || "#calendar"} target={event.link ? "_blank" : undefined} rel={event.link ? "noreferrer" : undefined}><time>{event.start ? formatDate(event.start) : "Scheduled"}</time><strong>{event.title}</strong></a>)}{googleSummary.events.length === 0 && <p className="google-workspace-empty">No upcoming events this week.</p>}</div>
-                  <div><h3>Recent Drive files</h3>{googleSummary.files.slice(0, 4).map((file) => <a key={file.id} href={file.link || "#"} target={file.link ? "_blank" : undefined} rel={file.link ? "noreferrer" : undefined}><BookOpen size={13} /><span>{file.name}</span></a>)}{googleSummary.files.length === 0 && <p className="google-workspace-empty">No recent files found.</p>}</div>
-                </div>
-              </>}
-            </section>
-            <ProviderIntegrations />
-          </details>
           </div>
 
-          <div className={`tab-content${activeTab === "progress" ? " is-active" : ""}`} id="progress-tab" role="tabpanel" aria-labelledby="nav-progress" aria-hidden={activeTab !== "progress"}>
+          <div className={`tab-content${activeTab === "integrations" ? " is-active" : ""}`} id="integrations-tab" role="region" aria-labelledby="nav-integrations" aria-hidden={activeTab !== "integrations"}>
+            <div className="section-heading">
+              <div><h2>Integrations</h2><p>Connect the tools that support your workspace.</p></div>
+              <span className="live-label"><i /> Manage connected services</span>
+            </div>
+            <section className="integrations-page" aria-label="Connected services">
+              <section className="panel planner-source-panel" aria-labelledby="notion-source-title">
+                <div className="panel-heading">
+                  <div><h2 id="notion-source-title">Notion</h2><p>Your planner database for tasks, notes, and projects.</p></div>
+                  <div className="google-workspace-actions">
+                    <span className={`connection-label ${state === "ready" ? "connected" : state === "error" ? "disconnected" : ""}`}>
+                      <i />{state === "ready" ? "Connected" : state === "error" ? "Not connected" : "Connecting"}
+                    </span>
+                    <button type="button" className="refresh-button" onClick={() => void loadTasks(true)} disabled={state === "loading"}>
+                      <RefreshCw size={13} className={state === "loading" ? "spin" : ""} />Refresh
+                    </button>
+                  </div>
+                </div>
+                {state === "error" && <p className="google-workspace-error" role="alert">{error}</p>}
+              </section>
+              <section className="panel google-workspace-panel" aria-labelledby="google-workspace-title">
+                <div className="panel-heading google-workspace-heading">
+                  <div><h2 id="google-workspace-title">Google Workspace</h2><p>{googleSummary.connected ? `Connected as ${googleSummary.email}` : "Connect Gmail, Calendar, and Drive for an on-demand AI briefing."}</p></div>
+                  <div className="google-workspace-actions">
+                    {googleSummary.connected
+                      ? <button type="button" className="refresh-button" onClick={() => void loadGoogleSummary(true)} disabled={googleLoading}>{googleLoading ? "Refreshing..." : "Refresh"}</button>
+                      : <a className="google-connect-button" href="/api/google/connect">Connect Google</a>}
+                    {googleSummary.connected && <button type="button" className="google-disconnect-button" onClick={() => void handleGoogleDisconnect()}>Disconnect</button>}
+                  </div>
+                </div>
+                {googleError && <p className="google-workspace-error" role="alert">{googleError}</p>}
+                {googleSummary.connected && <>
+                  <div className="google-workspace-counts"><span><strong>{googleSummary.unreadEmails}</strong> unread emails</span><span><strong>{meetingsToday}</strong> meetings today</span><span><strong>{googleSummary.files.length}</strong> recent Drive files</span></div>
+                  <div className="google-workspace-data">
+                    <div><h3>Unread email</h3>{googleSummary.messages.slice(0, 3).map((message) => <article key={message.id}><strong>{message.subject}</strong><span>{message.from}</span><p>{message.snippet}</p></article>)}{googleSummary.messages.length === 0 && <p className="google-workspace-empty">No unread messages found.</p>}</div>
+                    <div><h3>Upcoming calendar</h3>{googleSummary.events.slice(0, 4).map((event) => <a key={event.id} href={event.link || "#calendar"} target={event.link ? "_blank" : undefined} rel={event.link ? "noreferrer" : undefined}><time>{event.start ? formatDate(event.start) : "Scheduled"}</time><strong>{event.title}</strong></a>)}{googleSummary.events.length === 0 && <p className="google-workspace-empty">No upcoming events this week.</p>}</div>
+                    <div><h3>Recent Drive files</h3>{googleSummary.files.slice(0, 4).map((file) => <a key={file.id} href={file.link || "#"} target={file.link ? "_blank" : undefined} rel={file.link ? "noreferrer" : undefined}><BookOpen size={13} /><span>{file.name}</span></a>)}{googleSummary.files.length === 0 && <p className="google-workspace-empty">No recent files found.</p>}</div>
+                  </div>
+                </>}
+              </section>
+              <ProviderIntegrations />
+            </section>
+          </div>
+
+          <div className={`tab-content${activeTab === "progress" ? " is-active" : ""}`} id="progress-tab" role="region" aria-labelledby="nav-progress" aria-hidden={activeTab !== "progress"}>
           <div className="section-heading" id="progress"><div><h2>Your progress</h2><p>See where your time and attention are going</p></div><span className="live-label"><i /> All insights from your database</span></div>
           <section className="charts-grid">
             <article className="panel chart-panel"><div className="panel-heading"><div><h3>Task status</h3><p>Completed vs. pending</p></div><span className="chart-heading-icon tone-green"><CheckCheck size={15} /></span></div><div className="status-chart-row"><StatusChart data={statusDistribution} /><div className="status-legend"><div><i className="legend-completed" /><span>Completed</span><strong>{metrics.completed}</strong></div><div><i className="legend-pending" /><span>Pending</span><strong>{metrics.pending}</strong></div></div></div></article>
@@ -1163,17 +1247,17 @@ export default function DashboardPage() {
           </section>
           </div>
 
-          <div className={`tab-content${activeTab === "planner-assistant" ? " is-active" : ""}`} id="ai-assistant-tab" role="tabpanel" aria-labelledby="nav-planner-assistant" aria-hidden={activeTab !== "planner-assistant"}>
+          <div className={`tab-content${activeTab === "planner-assistant" ? " is-active" : ""}`} id="ai-assistant-tab" role="region" aria-labelledby="nav-planner-assistant" aria-hidden={activeTab !== "planner-assistant"}>
           <PlannerAssistant disabled={state !== "ready"} tasks={tasks} options={taskOptions} googleConnected={googleSummary.connected}
             taskToBreakDown={taskToBreakDown} onBreakdownHandled={clearTaskToBreakDown}
             onTaskSaved={handleAssistantTaskSaved} startDayPlan={requestDayPlan} onDayPlanStarted={clearDayPlanRequest} />
           </div>
 
-          <div className={`tab-content${activeTab === "calendar" ? " is-active" : ""}`} id="calendar-tab" role="tabpanel" aria-labelledby="nav-calendar" aria-hidden={activeTab !== "calendar"}>
+          <div className={`tab-content${activeTab === "calendar" ? " is-active" : ""}`} id="calendar-tab" role="region" aria-labelledby="nav-calendar" aria-hidden={activeTab !== "calendar"}>
             <CalendarCard tasks={tasks} options={taskOptions} />
           </div>
 
-          <div className={`tab-content${activeTab === "projects" ? " is-active" : ""}`} id="projects-tab" role="tabpanel" aria-labelledby="nav-projects" aria-hidden={activeTab !== "projects"}>
+          <div className={`tab-content${activeTab === "projects" ? " is-active" : ""}`} id="projects-tab" role="region" aria-labelledby="nav-projects" aria-hidden={activeTab !== "projects"}>
             <section className="panel areas-panel" id="projects">
               <div className="panel-heading"><div><h2>Progress by area</h2><p>Completion across your focus areas</p></div><Target size={16} className="panel-title-icon" /></div>
               <div className="area-list">
@@ -1202,7 +1286,7 @@ export default function DashboardPage() {
             </section>
           </div>
 
-          <div className={`tab-content${activeTab === "tasks" ? " is-active" : ""}`} id="tasks-tab" role="tabpanel" aria-labelledby="nav-tasks" aria-hidden={activeTab !== "tasks"}>
+          <div className={`tab-content${activeTab === "tasks" ? " is-active" : ""}`} id="tasks-tab" role="region" aria-labelledby="nav-tasks" aria-hidden={activeTab !== "tasks"}>
           <TaskTable tasks={tasks} options={taskOptions} loading={state === "loading"} search={search} onSearch={setSearch}
             onCreate={() => { setEditingTask(null); setCreateDialogOpen(true); }}
             onEdit={(task) => { setCreateDialogOpen(false); setEditingTask(task); }}
@@ -1216,7 +1300,7 @@ export default function DashboardPage() {
             createDisabled={state !== "ready" || !taskOptions} deleting={Boolean(deletingTaskId)} completingId={completingTaskId} />
           </div>
 
-          <div className={`tab-content${activeTab === "notes" ? " is-active" : ""}`} id="notes-tab" role="tabpanel" aria-labelledby="nav-notes" aria-hidden={activeTab !== "notes"}>
+          <div className={`tab-content${activeTab === "notes" ? " is-active" : ""}`} id="notes-tab" role="region" aria-labelledby="nav-notes" aria-hidden={activeTab !== "notes"}>
             <NotesPanel tasks={tasks} />
           </div>
 

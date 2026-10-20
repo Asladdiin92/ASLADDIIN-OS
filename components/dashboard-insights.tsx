@@ -324,7 +324,7 @@ export function AIRecommendationsPanel({
         <div>
           <span className="insight-eyebrow">AI-POWERED NEXT STEPS</span>
           <h2 id="recommendations-title">Recommendations</h2>
-          <p>Available recommendations run automatically when Home opens and after each dashboard refresh. Google reviews run only when connected.</p>
+          <p>Available recommendations run automatically when the Dashboard opens and after each dashboard refresh. Google reviews run only when connected.</p>
         </div>
         <span className="insight-heading-icon recommendations-heading-icon"><Sparkles size={17} /></span>
       </div>
