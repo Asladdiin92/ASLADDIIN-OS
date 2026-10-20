@@ -575,11 +575,12 @@ the app can serve users beyond your test accounts.
 ## Deploy to Render, Vercel, and MongoDB Atlas
 
 This repository is one Next.js application, not separate frontend and backend
-projects. The setup below runs the Next.js server on Render and deploys the
-same project to Vercel for the website. Vercel forwards `/api/*` requests to
-Render using the root-level `vercel.json`; browser requests remain on the
-Vercel origin. This is a deployment arrangement, not a code-level separation
-of frontend and backend.
+projects. For a Vercel deployment, keep the app as a single Next.js service and
+omit any `/api/*` rewrite to a placeholder host; the app can handle its API
+routes directly on Vercel. The older Render-only rewrite in `vercel.json` was a
+placeholder and should not be kept in a production deployment. This is a
+single-app deployment arrangement, not a code-level separation of frontend and
+backend.
 
 ### 1. Deploy the Next.js server to Render
 
@@ -645,9 +646,10 @@ Add optional provider variables to Render only when you enable the feature:
 | Telegram | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_USERNAME`, `TELEGRAM_WEBHOOK_SECRET`, `TELEGRAM_WEBHOOK_URL` |
 
 MongoDB is optional unless you use Telegram or another Mongo-backed integration:
-set both `MONGO_URI` and `MONGO_DB_NAME` on Render. The app also accepts the
-legacy database-name variable `MONGO_DATABASE_NAME`, but use `MONGO_DB_NAME`
-for new deployments.
+set both `MONGO_URI` and `MONGO_DB_NAME` on Render. Missing MongoDB settings do
+not prevent the app from starting; Mongo-backed features report a configuration
+error when used. The app also accepts the legacy database-name variable
+`MONGO_DATABASE_NAME`, but use `MONGO_DB_NAME` for new deployments.
 
 The following Notion property overrides are optional. Add only the ones whose
 default property names differ from your Notion database; the defaults shown
