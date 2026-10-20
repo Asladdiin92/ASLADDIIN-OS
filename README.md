@@ -1,9 +1,10 @@
-# Notion Academic & Life Dashboard
+# ASLADDIIN OS
 
-A personal dashboard built with **Next.js and React**. Your existing Notion
-database is the source of truth: the dashboard reads tasks from Notion, turns
-them into charts, progress indicators, and a deadline calendar, and lets you
-create, edit, and archive planner items in the same database.
+A personal productivity platform built with **Next.js and React**. Your
+existing Notion database is the source of truth for planner tasks: the
+dashboard turns them into charts, progress indicators, and a deadline
+calendar, and lets you create, edit, and archive planner items in the same
+database.
 
 This guide explains how the application works, what each part is for, and how
 to run, extend, and deploy it.
@@ -746,6 +747,10 @@ Vercel, configure Atlas network access using an egress option supported by your
 Vercel plan. Avoid `0.0.0.0/0` unless necessary; it allows connections from any
 IP and should only be used with a strong, least-privilege database user.
 MongoDB stores integration state and short-lived approvals, not planner tasks.
+Before serving the application against a MongoDB database, run
+`npm run db:setup-indexes` with the same MongoDB environment variables. This
+idempotently creates the application indexes; normal requests do not create
+indexes.
 
 ### Deployment checks and limitations
 

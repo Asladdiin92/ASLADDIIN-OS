@@ -66,14 +66,6 @@ async function createCollections(): Promise<IntegrationCollections> {
   const pendingActions = db.collection<TelegramPendingRecord>("telegram_pending_actions");
   const webhookUpdates = db.collection<TelegramWebhookUpdate>("telegram_webhook_updates");
   const githubPendingActions = db.collection<GitHubPendingRecord>("github_pending_actions");
-  await Promise.all([
-    links.createIndex({ userId: 1 }, { unique: true }),
-    links.createIndex({ chatId: 1 }, { unique: true }),
-    pairingCodes.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }),
-    pendingActions.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }),
-    webhookUpdates.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }),
-    githubPendingActions.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }),
-  ]);
   return { links, pairingCodes, pendingActions, webhookUpdates, githubPendingActions };
 }
 

@@ -344,15 +344,8 @@ let conversationServicePromise: Promise<ReturnType<typeof createAIConversationSe
 
 async function conversationService(): Promise<ReturnType<typeof createAIConversationService>> {
   if (!conversationServicePromise) {
-    conversationServicePromise = getAIDatabase().then(async (db: Db) => {
+    conversationServicePromise = getAIDatabase().then((db: Db) => {
       const collection = db.collection<AIConversation>("ai_conversations");
-      await Promise.all([
-        collection.createIndex({ userId: 1, updatedAt: -1 }),
-        collection.createIndex(
-          { conversationId: 1 },
-          { unique: true, partialFilterExpression: { conversationId: { $type: "string" } } },
-        ),
-      ]);
       return createAIConversationService(mongoRepository(collection));
     }).catch((error: unknown) => {
       conversationServicePromise = undefined;

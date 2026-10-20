@@ -172,16 +172,7 @@ let activityCollectionPromise: Promise<Collection<ActivityDocument>> | undefined
 async function activityCollection(): Promise<Collection<ActivityDocument>> {
   if (!activityCollectionPromise) {
     activityCollectionPromise = getMongoDb().then(async (db) => {
-      const collection = db.collection<ActivityDocument>(COLLECTION_NAME);
-      await Promise.all([
-        collection.createIndex({ userId: 1, occurredAt: -1, _id: -1 }),
-        collection.createIndex({ userId: 1, type: 1 }),
-        collection.createIndex(
-          { userId: 1, idempotencyKey: 1 },
-          { unique: true, partialFilterExpression: { idempotencyKey: { $type: "string" } } },
-        ),
-      ]);
-      return collection;
+      return db.collection<ActivityDocument>(COLLECTION_NAME);
     }).catch((error: unknown) => {
       activityCollectionPromise = undefined;
       if (error instanceof Error && error.message.startsWith("MongoDB")) throw error;

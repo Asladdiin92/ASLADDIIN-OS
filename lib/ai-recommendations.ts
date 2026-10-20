@@ -24,22 +24,14 @@ export type StoredRecommendation = {
 };
 
 type NewRecommendation = Omit<StoredRecommendation, "_id" | "userId" | "status" | "createdAt" | "updatedAt">;
+type RecommendationFingerprint = { taskId: string; taskFingerprint: string };
 let collectionPromise: Promise<Collection<StoredRecommendation>> | undefined;
 
 async function recommendationCollection(): Promise<Collection<StoredRecommendation>> {
   if (!collectionPromise) {
-    collectionPromise = getMongoDb().then(async (db) => {
-      const collection = db.collection<StoredRecommendation>("ai_recommendations");
-      await Promise.all([
-        collection.createIndex({ userId: 1, taskId: 1 }, { unique: true }),
-        collection.createIndex(
-          { expiresAt: 1 },
-          { expireAfterSeconds: 0, partialFilterExpression: { status: "active" } },
-        ),
-        collection.createIndex({ userId: 1, status: 1 }),
-      ]);
-      return collection;
-    }).catch((error: unknown) => {
+    collectionPromise = getMongoDb().then((db) =>
+      db.collection<StoredRecommendation>("ai_recommendations")
+    ).catch((error: unknown) => {
       collectionPromise = undefined;
       if (error instanceof Error && error.message.startsWith("MongoDB")) throw error;
       throw new Error("Recommendation storage could not be initialized.");
@@ -71,6 +63,27 @@ export async function getCurrentRecommendation(
     status: "active",
     expiresAt: { $gt: now },
   });
+}
+
+export async function getCurrentRecommendations(
+  userId: string,
+  fingerprints: RecommendationFingerprint[],
+  now = new Date(),
+): Promise<Map<string, StoredRecommendation>> {
+  if (fingerprints.length === 0) return new Map();
+
+  const collection = await recommendationCollection();
+  const taskFingerprints = new Map(fingerprints.map(({ taskId, taskFingerprint }) => [taskId, taskFingerprint]));
+  const records = await collection.find({
+    userId,
+    taskId: { $in: fingerprints.map(({ taskId }) => taskId) },
+    status: "active",
+    expiresAt: { $gt: now },
+  }).toArray();
+
+  return new Map(records
+    .filter((record) => taskFingerprints.get(record.taskId) === record.taskFingerprint)
+    .map((record) => [record.taskId, record]));
 }
 
 export async function invalidateStaleRecommendations(userId: string, tasks: Task[], now = new Date()): Promise<void> {

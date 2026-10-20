@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
     }).length;
     const open = tasks.filter((task) => !task.completed).length;
     const message = [
-      "ASLADIN planner refresh",
+      "ASLADDIIN OS planner refresh",
       `Open items: ${open}`,
       `Due today: ${dueToday}`,
       `Overdue: ${overdue}`,

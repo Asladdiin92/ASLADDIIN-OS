@@ -18,6 +18,18 @@ const briefingCache = new Map<string, CacheEntry>();
 const inFlight = new Map<string, Promise<DailyBriefing>>();
 const regenerationTimes = new Map<string, number>();
 
+async function measureStage<T>(stage: string, operation: () => Promise<T>): Promise<T> {
+  const startedAt = performance.now();
+  try {
+    return await operation();
+  } finally {
+    console.info("Daily briefing stage timing.", {
+      stage,
+      durationMs: Math.round(performance.now() - startedAt),
+    });
+  }
+}
+
 export class BriefingRateLimitError extends Error {
   constructor() {
     super("Please wait before regenerating your daily briefing.");
@@ -69,10 +81,10 @@ export async function getDailyBriefing(
 
   const request = (async () => {
     const [tasks, [activitiesResult, focusResult]] = await Promise.all([
-      fetchNotionTasks(),
+      measureStage("notion_tasks", fetchNotionTasks),
       Promise.allSettled([
-        listActivities(userId, 10),
-        getFocusMinutesToday(userId, timeZone, now),
+        measureStage("recent_activities", () => listActivities(userId, 10)),
+        measureStage("focus_sessions", () => getFocusMinutesToday(userId, timeZone, now)),
       ]),
     ]);
     const warnings: string[] = [];
@@ -92,13 +104,13 @@ export async function getDailyBriefing(
         errorName: focusResult.reason instanceof Error ? focusResult.reason.name : "UnknownError",
       });
     }
-    const briefing = await createDailyBriefing({
-      tasks,
-      now,
-      timeZone,
-      recentActivityTypes,
-      ...(focusMinutesToday !== undefined ? { focusMinutesToday } : {}),
-    }, generateDailyBriefingText, warnings);
+    const briefing = await measureStage("briefing_generation", () => createDailyBriefing({
+        tasks,
+        now,
+        timeZone,
+        recentActivityTypes,
+        ...(focusMinutesToday !== undefined ? { focusMinutesToday } : {}),
+      }, generateDailyBriefingText, warnings));
     if (!validateDailyBriefing(briefing, tasks)) {
       throw new Error("Daily briefing response validation failed.");
     }

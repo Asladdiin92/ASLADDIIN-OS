@@ -8,6 +8,13 @@ import {
   getDailyBriefing,
 } from "@/lib/daily-briefing-service";
 
+function logStageTiming(stage: string, startedAt: number): void {
+  console.info("Daily briefing stage timing.", {
+    stage,
+    durationMs: Math.round(performance.now() - startedAt),
+  });
+}
+
 function selectedTimeZone(request: Request): string | null {
   const values = new URL(request.url).searchParams.getAll("timezone");
   if (values.length === 0) return PLANNER_TIME_ZONE;
@@ -22,6 +29,7 @@ function selectedTimeZone(request: Request): string | null {
 
 export async function handleDailyBriefingRequest(request: Request, regenerate: boolean) {
   let userId: string | null;
+  let stageStartedAt = performance.now();
   try {
     const session = await auth();
     userId = session.userId;
@@ -33,6 +41,8 @@ export async function handleDailyBriefingRequest(request: Request, regenerate: b
       status: 503,
       headers: { "Cache-Control": "no-store" },
     });
+  } finally {
+    logStageTiming("authentication", stageStartedAt);
   }
   if (!userId) {
     return NextResponse.json({ error: "Sign in with an authorized account to view your briefing." }, {
@@ -40,6 +50,7 @@ export async function handleDailyBriefingRequest(request: Request, regenerate: b
       headers: { "Cache-Control": "no-store" },
     });
   }
+  stageStartedAt = performance.now();
   try {
     if (!await hasPlannerUserAccess(userId)) {
       return NextResponse.json({ error: "You are not authorized to view this briefing." }, {
@@ -55,6 +66,8 @@ export async function handleDailyBriefingRequest(request: Request, regenerate: b
       status: 503,
       headers: { "Cache-Control": "no-store" },
     });
+  } finally {
+    logStageTiming("authorization", stageStartedAt);
   }
   const timeZone = selectedTimeZone(request);
   if (!timeZone) {

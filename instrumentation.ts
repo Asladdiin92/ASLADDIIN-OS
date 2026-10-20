@@ -1,10 +1,8 @@
 import * as Sentry from "@sentry/nextjs";
-import { validateMongoEnvironment } from "./lib/mongo-config";
 
 export async function register() {
   if (process.env.NEXT_RUNTIME === "nodejs") {
     await import("./sentry.server.config");
-    validateMongoEnvironment();
   } else if (process.env.NEXT_RUNTIME === "edge") {
     await import("./sentry.edge.config");
   } else {

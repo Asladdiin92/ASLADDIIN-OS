@@ -3,8 +3,8 @@ import { ClerkProvider } from "@clerk/nextjs";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "My Dashboard",
-  description: "Your Notion-powered academic and life dashboard.",
+  title: "ASLADDIIN OS",
+  description: "Your personal productivity and AI operating platform.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

@@ -2,12 +2,12 @@ import { auth } from "@clerk/nextjs/server";
 import { NextRequest, NextResponse } from "next/server";
 import {
   dismissRecommendation,
-  getCurrentRecommendation,
+  getCurrentRecommendations,
   getDismissedRecommendationTaskIds,
   invalidateStaleRecommendations,
   storeRecommendation,
 } from "@/lib/ai-recommendations";
-import { hasPlannerAccess } from "@/lib/access";
+import { hasPlannerUserAccess } from "@/lib/access";
 import { explainNextAction } from "@/lib/gemini";
 import { fetchGoogleCalendarEvents, readGoogleSession } from "@/lib/google-workspace";
 import { PLANNER_TIME_ZONE } from "@/lib/planner-datetime";
@@ -56,14 +56,13 @@ function safeErrorResponse(error: unknown) {
 }
 
 async function authorizedUser(request: NextRequest): Promise<string | NextResponse> {
-  if (!await hasPlannerAccess()) {
+  const { userId } = await auth();
+  if (!userId || !await hasPlannerUserAccess(userId)) {
     return NextResponse.json({ error: "You are not authorized to use this planner." }, { status: 403 });
   }
   if (!isSameOrigin(request)) {
     return NextResponse.json({ error: "This request must come from the dashboard." }, { status: 403 });
   }
-  const { userId } = await auth();
-  if (!userId) return NextResponse.json({ error: "Sign in before using recommendations." }, { status: 401 });
   return userId;
 }
 
@@ -81,9 +80,19 @@ export async function POST(request: NextRequest) {
         () => ({ events: [], available: false }),
       ) : Promise.resolve({ events: [], available: false }),
     ]);
-    await invalidateStaleRecommendations(userId, tasks, now);
-    const dismissed = await getDismissedRecommendationTaskIds(userId);
+    const [, dismissed] = await Promise.all([
+      invalidateStaleRecommendations(userId, tasks, now),
+      getDismissedRecommendationTaskIds(userId),
+    ]);
     const ranked = rankTasks(tasks, dismissed, now, PLANNER_TIME_ZONE);
+    const currentRecommendations = await getCurrentRecommendations(
+      userId,
+      ranked.map((scored) => ({
+        taskId: scored.task.id,
+        taskFingerprint: taskRecommendationFingerprint(scored.task),
+      })),
+      now,
+    );
     const focusWindow = getNextFocusWindow(now, PLANNER_TIME_ZONE, eventsResult.events);
     const currentLocalTime = new Intl.DateTimeFormat("en", {
       weekday: "long",
@@ -98,7 +107,7 @@ export async function POST(request: NextRequest) {
 
     for (const scored of ranked) {
       const fingerprint = taskRecommendationFingerprint(scored.task);
-      const saved = await getCurrentRecommendation(userId, scored.task.id, fingerprint, now);
+      const saved = currentRecommendations.get(scored.task.id);
       if (saved && saved.score === scored.score &&
           JSON.stringify(saved.factors) === JSON.stringify(scored.factors)) {
         return NextResponse.json({
