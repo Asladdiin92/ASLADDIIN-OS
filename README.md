@@ -30,7 +30,7 @@ optional columns are not fabricated or seeded.
 - [Connect Google Workspace](#connect-google-workspace)
 - [Connect GitHub and Telegram](#connect-github-and-telegram)
 - [Configure Sentry](#configure-sentry)
-- [Deploy to Render, Vercel, and MongoDB Atlas](#deploy-to-render-vercel-and-mongodb-atlas)
+- [Deploy to Vercel (or Render) and MongoDB Atlas](#deploy-to-vercel-or-render-and-mongodb-atlas)
 - [Security notes](#security-notes)
 - [Troubleshooting](#troubleshooting)
 - [Ideas for learning and extending the project](#ideas-for-learning-and-extending-the-project)
@@ -129,19 +129,20 @@ SENTRY_PROJECT=node
 
 Create a Sentry auth token with permission to create releases and upload source
 maps. The organization slug is the Sentry organization in your project URL, and
-the project slug is shown in Project Settings. The values shown when this guide
-was written were `haramaya-university-bx` and `node`. Keep the token out of
+the project slug is shown in Project Settings. Keep the token out of
 `NEXT_PUBLIC_...` variables, source control, and browser code. The Next.js build
-uploads source maps when the token is present and deletes the local maps after
-upload. Without the token, error and trace reporting still work, but production
-stack traces may not map back to the original source.
+enables Sentry's build plugin only when all three variables are present; it
+uploads hidden client source maps and deletes local maps after upload. Without
+all three build variables, runtime error and trace reporting still work through
+the DSN, but production stack traces may not map back to the original source.
 
-Sentry events are sent through `/api/_sentry` to reduce losses from browser
-content blockers. The endpoint is intentionally public so unauthenticated
-browser events can be forwarded; it only serves as the Sentry tunnel. Session
-Replay is not enabled because dashboard pages can contain private planner
-content. Review Sentry's masking and data-retention settings before enabling
-Replay.
+When the Sentry build plugin is enabled, browser events are sent through
+`/api/_sentry` to reduce losses from content blockers. Otherwise, the browser
+sends events directly to the configured DSN. The tunnel endpoint is
+intentionally public so unauthenticated browser events can be forwarded; it
+only serves as the Sentry tunnel. Session Replay is not enabled because
+dashboard pages can contain private planner content. Review Sentry's masking
+and data-retention settings before enabling Replay.
 
 After setting the build variables, redeploy and trigger a normal app action.
 Check **Issues** for errors and **Explore → Traces** for requests and route
@@ -572,17 +573,15 @@ delete, create, or edit Google data. Google OAuth currently requests broad
 Gmail and Drive scopes, which may require Google OAuth app verification before
 the app can serve users beyond your test accounts.
 
-## Deploy to Render, Vercel, and MongoDB Atlas
+## Deploy to Vercel (or Render) and MongoDB Atlas
 
-This repository is one Next.js application, not separate frontend and backend
-projects. For a Vercel deployment, keep the app as a single Next.js service and
-omit any `/api/*` rewrite to a placeholder host; the app can handle its API
-routes directly on Vercel. The older Render-only rewrite in `vercel.json` was a
-placeholder and should not be kept in a production deployment. This is a
-single-app deployment arrangement, not a code-level separation of frontend and
-backend.
+This repository is one full-stack Next.js application. Vercel runs both its
+website and API routes; the current `vercel.json` intentionally does not proxy
+`/api/*` to Render. Render is an alternative standalone host for the same app,
+not a separate backend for Vercel. Deploy to one host unless you have separately
+designed and configured a frontend/backend split.
 
-### 1. Deploy the Next.js server to Render
+### 1. Deploy the Next.js app to Render (optional)
 
 1. Push this repository to GitHub and create a Render **Web Service** from it.
    Select the correct repository and branch. Set **Root Directory** to `.`
@@ -602,14 +601,11 @@ backend.
    Choose Node.js **24.x LTS** in Render's runtime settings (or set
    `NODE_VERSION` to the current supported 24.x release). Render supplies the
    listening port through `PORT`; do not add or hard-code a port.
-3. After the first successful deployment, copy the service's public HTTPS
-   hostname, such as `https://my-notion-api.onrender.com`.
-4. Edit `vercel.json` and replace
-   `https://YOUR-RENDER-SERVICE.onrender.com` with that exact hostname. Keep
-   the `/api/:path*` suffix. Commit and push this change before deploying the
-   Vercel project so API requests do not point to the placeholder.
+3. Use the Render service's public HTTPS hostname as the app's public URL when
+   configuring Clerk, Google OAuth, and Telegram callbacks. Do not add a Vercel
+   rewrite to proxy API requests to this service.
 
-### 2. Add environment variables to Render
+### 2. Add environment variables to Render (optional)
 
 Render runs the API routes, so put the app's server-side configuration and
 provider credentials in **Render → Web Service → Environment**. Add one
@@ -624,9 +620,9 @@ CLERK_SECRET_KEY=your_clerk_secret_key
 ALLOWED_EMAILS=your_verified_clerk_email@example.com
 ```
 
-The Clerk variables are also needed on Vercel (next section), because both
-deployments run the app's Clerk middleware. `ALLOWED_EMAILS` is checked by the
-backend routes and belongs on Render.
+If you deploy the app to both hosts separately, configure the Clerk variables
+on both because each deployment runs the app's Clerk middleware.
+`ALLOWED_EMAILS` is checked by the backend routes and belongs on Render.
 
 For Atlas-backed features, set:
 
@@ -687,7 +683,7 @@ match `.env.example`:
 server secrets in a `NEXT_PUBLIC_*` variable. After changing Render
 environment variables, redeploy or restart the service.
 
-### 3. Deploy the website to Vercel
+### 3. Deploy the full app to Vercel
 
 1. Import the same GitHub repository and branch into Vercel as a Next.js
    project. Set **Root Directory** to `.` (the folder containing
@@ -695,76 +691,72 @@ environment variables, redeploy or restart the service.
    framework preset, and choose Node.js **24.x** in the project settings.
    Leave **Build Command** as the detected default `npm run build` (equivalent
    to `next build` here), and leave the output directory at its Next.js
-   default. Vercel installs dependencies from the lockfile.
-2. Set these two variables in **Vercel → Project → Settings → Environment
-   Variables**, for the environments you deploy:
+   default. Vercel installs dependencies from the lockfile and serves both
+   the pages and `app/api` routes.
+2. In **Vercel → Project → Settings → Environment Variables**, configure the
+   variables needed by the features you use. The minimum for the planner is:
 
    ```dotenv
+   NOTION_API_KEY=your_notion_integration_secret
+   NOTION_DATABASE_ID=your_notion_database_id
    NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=your_clerk_publishable_key
    CLERK_SECRET_KEY=your_clerk_secret_key
+   ALLOWED_EMAILS=your_verified_clerk_email@example.com
    ```
 
-   To enable Sentry, also set `NEXT_PUBLIC_SENTRY_DSN` in Vercel and on Render.
-   Vercel needs it at build time for browser events; Render needs it at runtime
-   for server and edge events.
+   Add optional provider and database variables from `.env.example` to Vercel
+   when enabling those server-side features. Do not omit the server-side
+   integration credentials on the assumption that Vercel proxies API requests
+   to Render; it does not.
 
-   Use the same Clerk application and matching keys as on Render. Do not add
-   the Notion, MongoDB, AI, Google, GitHub, Telegram, or `ALLOWED_EMAILS`
-   secrets to Vercel for this arrangement; the API requests are proxied to
-   Render. The Clerk secret is required by middleware and must remain server
-   side.
-3. In the repository's `vercel.json`, replace
-   `https://YOUR-RENDER-SERVICE.onrender.com` with the actual Render HTTPS
-   hostname before deploying. Commit and push the change.
-4. Deploy Vercel and open the assigned production URL. The root
-   `vercel.json` forwards `/api/*` to Render; Vercel continues to serve the
-   Next.js page and its static assets.
+   To enable Sentry, set `NEXT_PUBLIC_SENTRY_DSN` for event reporting. For
+   source-map uploads, also set `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, and
+   `SENTRY_PROJECT` as private Vercel environment variables for each build
+   environment where uploads are required. All three build variables are
+   required.
+
+   Never prefix secrets such as `CLERK_SECRET_KEY`, `NOTION_API_KEY`,
+   `GEMINI_API_KEY`, `SESSION_SECRET`, or `SENTRY_AUTH_TOKEN` with
+   `NEXT_PUBLIC_`. `ALLOWED_EMAILS` is also server-only.
+3. Deploy Vercel and open the assigned production URL. API requests run on
+   this Next.js deployment. When the Sentry build plugin is enabled, its tunnel
+   at `/api/_sentry` is served by the same deployment.
 
 ### 4. Set public callback URLs
 
-Use the Vercel production domain (or your custom public domain) for provider
-callbacks and webhooks; Vercel proxies these API paths to Render.
+Use the public domain of the host running the app (Vercel or standalone Render)
+for provider callbacks and webhooks. For a Vercel deployment, configure:
 
-- For Google OAuth, set both `GOOGLE_REDIRECT_URI` and `GOOGLE_CALLBACK_URL`
-  on Render to `https://YOUR-VERCEL-DOMAIN/api/google/callback` and register
-  that exact URL in the Google OAuth client. The two variables must match.
-- For Telegram, set `TELEGRAM_WEBHOOK_URL` on Render to
+- Set both `GOOGLE_REDIRECT_URI` and `GOOGLE_CALLBACK_URL` to
+  `https://YOUR-VERCEL-DOMAIN/api/google/callback` and register that exact URL
+  in Google Cloud Console. The two variables must match.
+- Set `TELEGRAM_WEBHOOK_URL` to
   `https://YOUR-VERCEL-DOMAIN/api/telegram/webhook`.
-- Configure the Clerk application for the Vercel public domain. Sign-in takes
-  place on Vercel, and API calls reach Render with the user's session.
+- Configure the Clerk application for the same public domain.
 
-If you use a custom domain, use it as the public URL consistently and update
-the corresponding Clerk, Google, and Telegram settings. Redeploy after
-changing environment variables or `vercel.json`.
+For a standalone Render deployment, use its service URL instead. If you use a
+custom domain, update the corresponding Clerk, Google, and Telegram settings.
+Redeploy after changing environment variables.
 
 ### 5. Configure MongoDB Atlas
 
 Create an Atlas database user restricted to the application database, then
-copy the Atlas `mongodb+srv://` connection string into Render's `MONGO_URI`
-and set `MONGO_DB_NAME` to the database name in that URI. In Atlas **Network
-Access**, allow the Render service's outbound IP addresses when available. Avoid
-`0.0.0.0/0` unless necessary; it allows connections from any IP and should
-only be used with a strong, least-privilege database user. MongoDB stores
-integration state and short-lived approvals, not the planner tasks.
+configure `MONGO_URI` and `MONGO_DB_NAME` on the host running the app. For
+Vercel, configure Atlas network access using an egress option supported by your
+Vercel plan. Avoid `0.0.0.0/0` unless necessary; it allows connections from any
+IP and should only be used with a strong, least-privilege database user.
+MongoDB stores integration state and short-lived approvals, not planner tasks.
 
 ### Deployment checks and limitations
 
-1. Sign in at the Vercel production domain using a verified Clerk email listed
-   in Render's `ALLOWED_EMAILS`.
-2. Confirm the dashboard loads its planner data and try one normal API-backed
-   action. Check Render logs if API calls fail; the API executes there.
-3. If a write returns a same-origin `403`, inspect how the proxy forwards the
-   original host headers. Do not remove the origin checks to make the request
-   pass.
-4. If using MongoDB-backed features, verify Atlas network access and the two
-   MongoDB variables on Render.
-
-Both providers build the same Next.js code, and the application middleware
-runs on both deployments. The rewrite keeps browser API calls on the Vercel
-origin, while Render remains directly reachable at its own service URL. This
-setup is convenient for a single repository, but it is not an independent
-frontend/backend split; a separate backend would require a dedicated API
-architecture and corresponding authentication/origin changes.
+1. Sign in at the deployment's public domain using a verified Clerk email
+   listed in that deployment's `ALLOWED_EMAILS`.
+2. Confirm the dashboard loads planner data and test a normal API-backed
+   action. Check that deployment's function/runtime logs if an API call fails.
+3. If using MongoDB-backed features, verify Atlas network access and both
+   MongoDB variables on the same deployment.
+4. If Sentry source-map uploads are configured, confirm the build completed
+   without upload errors and that production stack traces resolve in Sentry.
 
 Do **not** upload `.env.local`, commit credentials, or expose server secrets
 with a `NEXT_PUBLIC_` prefix. `.env.example` contains variable names and
@@ -812,7 +804,7 @@ placeholders, not values to copy into production.
 | --- | --- |
 | “Add `NOTION_API_KEY` and `NOTION_DATABASE_ID`...” | Fill both values in `.env.local` and restart `npm run dev`. `NOTION_TOKEN` is also accepted instead of `NOTION_API_KEY`. |
 | Clerk reports missing keys | Set `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` locally and in the Vercel project, then restart or redeploy. |
-| Sentry does not show events | Set `NEXT_PUBLIC_SENTRY_DSN` in Vercel and Render, then rebuild/redeploy both services. |
+| Sentry does not show events | Set `NEXT_PUBLIC_SENTRY_DSN` on the deployment running the app, then rebuild/redeploy it. |
 | Planner assistant reports a missing Gemini key | Set `GEMINI_API_KEY` in `.env.local` or the Vercel environment, then restart or redeploy. |
 | Google connection setup fails | Set `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and a 32-character `SESSION_SECRET`; ensure both callback URL variables match the URI registered in Google Cloud Console, then redeploy. |
 | Google asks to reauthorize | The stateless Google session expires within one hour. Reconnect from the dashboard; persistent refresh tokens are not stored. |
