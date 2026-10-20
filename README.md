@@ -29,6 +29,7 @@ optional columns are not fabricated or seeded.
 - [Connect your Notion database](#connect-your-notion-database)
 - [Connect Google Workspace](#connect-google-workspace)
 - [Connect GitHub and Telegram](#connect-github-and-telegram)
+- [Configure Sentry](#configure-sentry)
 - [Deploy to Render, Vercel, and MongoDB Atlas](#deploy-to-render-vercel-and-mongodb-atlas)
 - [Security notes](#security-notes)
 - [Troubleshooting](#troubleshooting)
@@ -108,6 +109,45 @@ the browser bundle or API response.
 Dependencies and commands are recorded in `package.json` and
 `package-lock.json`. **Notion remains the planner database**; MongoDB stores
 AI-specific data and integration metadata separately.
+
+## Configure Sentry
+
+Sentry is initialized for browser, Node.js, and Edge runtimes. The app captures
+errors, console logs, sampled performance traces, and client-side route
+transitions when `NEXT_PUBLIC_SENTRY_DSN` is set. Production traces are sampled
+at 10%; development traces are sampled at 100%. The app does not explicitly
+attach signed-in user identities to Sentry events.
+
+For readable production stack traces, add these **server-side build
+environment variables** to each deployment that builds this app:
+
+```dotenv
+SENTRY_AUTH_TOKEN=your_sentry_auth_token
+SENTRY_ORG=your_sentry_organization_slug
+SENTRY_PROJECT=node
+```
+
+Create a Sentry auth token with permission to create releases and upload source
+maps. The organization slug is the Sentry organization in your project URL, and
+the project slug is shown in Project Settings. The values shown when this guide
+was written were `haramaya-university-bx` and `node`. Keep the token out of
+`NEXT_PUBLIC_...` variables, source control, and browser code. The Next.js build
+uploads source maps when the token is present and deletes the local maps after
+upload. Without the token, error and trace reporting still work, but production
+stack traces may not map back to the original source.
+
+Sentry events are sent through `/api/_sentry` to reduce losses from browser
+content blockers. The endpoint is intentionally public so unauthenticated
+browser events can be forwarded; it only serves as the Sentry tunnel. Session
+Replay is not enabled because dashboard pages can contain private planner
+content. Review Sentry's masking and data-retention settings before enabling
+Replay.
+
+After setting the build variables, redeploy and trigger a normal app action.
+Check **Issues** for errors and **Explore → Traces** for requests and route
+transitions. Configure issue alerts and notification destinations in Sentry's
+project settings; those are account-level settings and are not controlled by
+this repository.
 
 ## Connect GitHub and Telegram
 
