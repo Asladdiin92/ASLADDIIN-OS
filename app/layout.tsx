@@ -4,7 +4,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "ASLADDIIN OS",
-  description: "Your personal productivity and AI operating platform.",
+  description: "My personal productivity and AI operating platform.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
