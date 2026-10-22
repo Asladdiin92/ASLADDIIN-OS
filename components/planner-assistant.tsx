@@ -257,6 +257,11 @@ export function PlannerAssistant({
     setMemorySaving(true);
     setError("");
     try {
+      const memoryContent = assistantMode === "research" && sources.length > 0
+        ? `${answer}\n\nSources:\n${sources.map((source, index) =>
+            `[${index + 1}] ${source.title}\n${source.url}${source.snippet ? `\n${source.snippet}` : ""}`,
+          ).join("\n\n")}`
+        : answer;
       const response = await fetch("/api/assistant", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -264,7 +269,7 @@ export function PlannerAssistant({
           mode: "save_memory",
           memoryType,
           title: title.slice(0, 200),
-          content: answer,
+          content: memoryContent.slice(0, 20_000),
           metadata: {
             question: question.slice(0, 1_000),
             ...(assistantMode === "research" ? { source: "tavily" } : { fileName: title.slice(0, 250) }),
