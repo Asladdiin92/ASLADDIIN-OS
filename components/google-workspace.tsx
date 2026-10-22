@@ -112,9 +112,9 @@ export function WorkspaceAttention({
       ) : (
         <>
           <div className="workspace-attention-metrics">
-            <div><Mail size={14} /><strong>{summary.errors?.gmail ? "—" : summary.unreadEmails}</strong><span>unread emails</span></div>
+            <div><Mail size={14} /><strong>{summary.errors?.gmail ? "—" : summary.unreadEmails}</strong><span>total unread emails</span></div>
             <div><CalendarDays size={14} /><strong>{summary.errors?.calendar ? "—" : todayEvents.length}</strong><span>meetings today</span></div>
-            <div><Cloud size={14} /><strong>{summary.errors?.drive ? "—" : summary.files.length}</strong><span>recent files</span></div>
+            <div><Cloud size={14} /><strong>{summary.errors?.drive ? "—" : summary.files.length}</strong><span>latest Drive files</span></div>
           </div>
           {nextEvent && (
             <p className="workspace-attention-next">
@@ -173,11 +173,14 @@ export function GoogleConnectionCard({
         })}
       </ul>
       <p className="google-connection-counts" aria-label="Google Workspace summary">
-        {serviceHealth.counts.unread ?? "—"} unread
+        {serviceHealth.counts.unread ?? "—"} total unread emails
         <span aria-hidden="true"> • </span>
-        {serviceHealth.counts.upcoming ?? "—"} upcoming
+        {serviceHealth.counts.upcoming ?? "—"} events in the next 7 days
         <span aria-hidden="true"> • </span>
-        {serviceHealth.counts.files ?? "—"} files
+        {serviceHealth.counts.files ?? "—"} latest Drive files (up to 8)
+      </p>
+      <p className="google-connection-health-note">
+        Counts are summaries: the app shows up to 5 unread emails, 20 upcoming events, and 8 recent files.
       </p>
       {error && !Object.keys(summary.errors ?? {}).length && (
         <p className="google-connection-health-note" role="alert">Google Workspace could not be refreshed. Check the service status above and try again.</p>
@@ -300,7 +303,7 @@ export function GoogleWorkspacePage({
         <div>
           <span className="insight-eyebrow">CONNECTED GOOGLE DATA</span>
           <h2>Google Workspace</h2>
-          <p>Review live Gmail, Calendar, and Drive data, then ask for an explicitly AI-generated observation.</p>
+          <p>Review read-only Google data: total unread count, up to 5 unread emails, 20 events for the next 7 days, and 8 latest Drive files. Ask the AI assistant separately for an observation.</p>
         </div>
         <div className="google-workspace-actions">
           {summary.connected && (
