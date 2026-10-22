@@ -7,9 +7,7 @@ export type MongoHealthStatus = "connected" | "disconnected" | "error";
 
 type MongoGlobal = typeof globalThis & {
   asladinMongoClientPromise?: Promise<MongoClient>;
-  asladinMongoClient?: MongoClient;
   asladinMongoHealthStatus?: MongoHealthStatus;
-  asladinMongoCloseConnection?: () => Promise<void>;
 };
 
 const mongoGlobal = globalThis as MongoGlobal;
@@ -28,12 +26,10 @@ export async function getMongoClient(): Promise<MongoClient> {
       maxPoolSize: 5,
     });
     mongoGlobal.asladinMongoClientPromise = client.connect().then((connectedClient) => {
-      mongoGlobal.asladinMongoClient = connectedClient;
       mongoGlobal.asladinMongoHealthStatus = "connected";
       return connectedClient;
     }).catch(() => {
       mongoGlobal.asladinMongoClientPromise = undefined;
-      mongoGlobal.asladinMongoClient = undefined;
       mongoGlobal.asladinMongoHealthStatus = "error";
       throw new Error("MongoDB connection failed. Check the server configuration and Atlas network access.");
     });
@@ -78,9 +74,6 @@ export async function closeMongoConnection(): Promise<void> {
     await client.close();
   } finally {
     mongoGlobal.asladinMongoClientPromise = undefined;
-    mongoGlobal.asladinMongoClient = undefined;
     mongoGlobal.asladinMongoHealthStatus = "disconnected";
   }
 }
-
-mongoGlobal.asladinMongoCloseConnection = closeMongoConnection;

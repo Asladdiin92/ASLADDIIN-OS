@@ -190,6 +190,9 @@ Do not reuse the example text above as a real secret.
   unless you accept that processing.
 - The app currently suggests Google actions; it does not send email or modify
   Calendar/Drive data.
+- Gmail, Calendar, and Drive are fetched independently. If Google denies one
+  service's access, the dashboard keeps data from the other services and shows
+  a service-specific error for the unavailable data.
 
 MongoDB is not used for Google OAuth. The integration state database below
 stores Telegram pairing/link state and short-lived approval records; it does
@@ -235,7 +238,9 @@ GITHUB_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----\n...key contents...\n-----EN
 Set the values in `.env.local` for local development and in the appropriate
 Vercel environments, then restart/redeploy. Store the PEM exactly, including
 the header/footer; literal `\n` line separators are converted by the server.
-Never prefix the private key with `NEXT_PUBLIC_`.
+The key must be a valid RSA private key; an absent or invalid GitHub App
+configuration is shown as setup needed rather than an upstream outage. Never
+prefix the private key with `NEXT_PUBLIC_`.
 
 ### 3. Use GitHub from the dashboard
 

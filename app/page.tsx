@@ -838,7 +838,11 @@ export default function DashboardPage() {
       if (response.status === 401) setGoogleSummary(emptyGoogleSummary);
       if (!response.ok) throw new Error(result.error ?? "Google session expired. Reconnect your Google account.");
       setGoogleSummary(result);
-      if (result.error) setGoogleError(result.error);
+      const serviceErrors = Object.entries(result.errors ?? {}).map(([service, message]) => {
+        const name = service === "gmail" ? "Gmail" : service === "calendar" ? "Google Calendar" : "Google Drive";
+        return `${name}: ${message}`;
+      });
+      if (serviceErrors.length) setGoogleError(serviceErrors.join(" "));
       else if (showToast) notify("Google Workspace data refreshed.");
     } catch (loadError) {
       const message = apiErrorMessage(loadError, "Could not load Google Workspace.");

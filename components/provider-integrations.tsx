@@ -48,7 +48,12 @@ export function ProviderIntegrations() {
     setGithubError("");
     try {
       const response = await fetch("/api/github", { cache: "no-store" });
-      const result = await readResponse<{ repositories: Repository[] }>(response);
+      const result = await readResponse<{ configured?: boolean; repositories: Repository[] }>(response);
+      if (result.configured === false) {
+        setRepositories([]);
+        setGithubError("GitHub App is not configured.");
+        return;
+      }
       setRepositories(result.repositories);
       if (repository && !result.repositories.some((item) => item.fullName === repository)) {
         setRepository("");
@@ -87,8 +92,13 @@ export function ProviderIntegrations() {
     setGithubLoading(true);
     setGithubError("");
     void fetch(`/api/github?repository=${encodeURIComponent(repository)}`, { cache: "no-store" })
-      .then((response) => readResponse<{ snapshot: Snapshot }>(response))
-      .then((result) => { if (!cancelled) setSnapshot(result.snapshot); })
+      .then((response) => readResponse<{ configured?: boolean; snapshot: Snapshot | null }>(response))
+      .then((result) => {
+        if (!cancelled) {
+          setSnapshot(result.snapshot);
+          if (result.configured === false) setGithubError("GitHub App is not configured.");
+        }
+      })
       .catch((error: unknown) => {
         if (!cancelled) setGithubError(error instanceof Error ? error.message : "Could not load this repository.");
       })

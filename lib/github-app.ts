@@ -1,6 +1,6 @@
 import "server-only";
 
-import { createSign } from "node:crypto";
+import { createPrivateKey, createSign } from "node:crypto";
 
 const GITHUB_API = "https://api.github.com";
 const API_VERSION = "2022-11-28";
@@ -30,12 +30,29 @@ export type GitHubRepositorySnapshot = {
 };
 type GitHubResponseError = { message?: string; errors?: Array<{ message?: string }> };
 
+export function isGitHubConfigured(): boolean {
+  const privateKey = process.env.GITHUB_PRIVATE_KEY?.replaceAll("\\n", "\n").trim();
+  if (!process.env.GITHUB_APP_ID?.trim() || !process.env.GITHUB_INSTALLATION_ID?.trim() || !privateKey) return false;
+  try {
+    return createPrivateKey(privateKey).asymmetricKeyType === "rsa";
+  } catch {
+    return false;
+  }
+}
+
 function requiredConfig(): { appId: string; installationId: string; privateKey: string } {
-  const appId = process.env.GITHUB_APP_ID;
-  const installationId = process.env.GITHUB_INSTALLATION_ID;
-  const privateKey = process.env.GITHUB_PRIVATE_KEY?.replaceAll("\\n", "\n");
+  const appId = process.env.GITHUB_APP_ID?.trim();
+  const installationId = process.env.GITHUB_INSTALLATION_ID?.trim();
+  const privateKey = process.env.GITHUB_PRIVATE_KEY?.replaceAll("\\n", "\n").trim();
   if (!appId || !installationId || !privateKey) {
     throw new Error("Set GITHUB_APP_ID, GITHUB_INSTALLATION_ID, and GITHUB_PRIVATE_KEY to connect the GitHub App.");
+  }
+  try {
+    if (createPrivateKey(privateKey).asymmetricKeyType !== "rsa") {
+      throw new Error("unsupported key type");
+    }
+  } catch {
+    throw new Error("Set GITHUB_PRIVATE_KEY to a valid GitHub App RSA private key.");
   }
   return { appId, installationId, privateKey };
 }

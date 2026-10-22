@@ -143,7 +143,9 @@ sends events directly to the configured DSN. The tunnel endpoint is
 intentionally public so unauthenticated browser events can be forwarded; it
 only serves as the Sentry tunnel. Session Replay is not enabled because
 dashboard pages can contain private planner content. Review Sentry's masking
-and data-retention settings before enabling Replay.
+and data-retention settings before enabling Replay. Tunnel timeouts affect
+telemetry delivery only; application API requests do not depend on Sentry
+event delivery.
 
 After setting the build variables, redeploy and trigger a normal app action.
 Check **Issues** for errors and **Explore → Traces** for requests and route

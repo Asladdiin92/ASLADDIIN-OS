@@ -17,11 +17,54 @@ const GOOGLE_REQUEST_TIMEOUT_MS = 15_000;
 
 type OAuthState = { userId: string; nonce: string; expiresAt: number };
 type GoogleSession = { userId: string; email: string; accessToken: string; expiresAt: number };
+type GoogleService = "gmail" | "calendar" | "drive";
 type GmailPart = {
   mimeType?: string;
   body?: { data?: string };
   parts?: GmailPart[];
 };
+
+class GoogleRequestError extends Error {
+  constructor(readonly service: GoogleService, readonly status: number) {
+    super(status === 401 ? "Your Google session expired. Reconnect your Google account." : `${service} request failed (${status}).`);
+    this.name = "GoogleRequestError";
+  }
+}
+
+const googleServiceNames: Record<GoogleService, string> = {
+  gmail: "Gmail",
+  calendar: "Google Calendar",
+  drive: "Google Drive",
+};
+
+type GoogleServiceResult<T> = { data: T; error?: never } | { data?: never; error: string };
+
+async function requestGoogleService<T>(
+  service: GoogleService,
+  operation: () => Promise<T>,
+): Promise<GoogleServiceResult<T>> {
+  try {
+    return { data: await operation() };
+  } catch (error) {
+    const status = error instanceof GoogleRequestError ? error.status : undefined;
+    if (process.env.NODE_ENV === "development") {
+      console.warn("Google Workspace service request failed.", {
+        service,
+        ...(status ? { status } : {}),
+        errorName: error instanceof Error ? error.name : "UnknownError",
+      });
+    }
+    if (status === 401) throw error;
+    const name = googleServiceNames[service];
+    return {
+      error: status === 403
+        ? `${name} access was denied by Google (403).`
+        : status
+          ? `${name} request failed (${status}).`
+          : `${name} data could not be loaded.`,
+    };
+  }
+}
 
 function googleFetch(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
   return fetch(input, {
@@ -197,15 +240,12 @@ export async function revokeGoogleAccess(session: GoogleSession): Promise<void> 
   }
 }
 
-async function googleGet<T>(token: string, url: URL): Promise<T> {
+async function googleGet<T>(token: string, url: URL, service: GoogleService): Promise<T> {
   const response = await googleFetch(url, {
     headers: { Authorization: `Bearer ${token}` },
     cache: "no-store",
   });
-  if (!response.ok) {
-    if (response.status === 401) throw new Error("Your Google session expired. Reconnect your Google account.");
-    throw new Error(`Google data request failed (${response.status}).`);
-  }
+  if (!response.ok) throw new GoogleRequestError(service, response.status);
   const contentLength = Number(response.headers.get("content-length") ?? 0);
   if (Number.isFinite(contentLength) && contentLength > 1_048_576) {
     throw new Error("Google returned a message that is too large to process. Try again with a shorter email.");
@@ -272,49 +312,67 @@ export async function fetchGoogleWorkspaceSummary(
   driveUrl.searchParams.set("fields", "files(id,name,mimeType,modifiedTime,webViewLink)");
 
   const [mailResult, calendarResult, driveResult] = await Promise.all([
-    googleGet<{ messages?: Array<{ id: string }>; resultSizeEstimate?: number }>(session.accessToken, messagesUrl),
-    googleGet<{ items?: Array<{ id: string; summary?: string; start?: { dateTime?: string; date?: string }; end?: { dateTime?: string; date?: string }; htmlLink?: string }> }>(session.accessToken, calendarUrl),
-    googleGet<{ files?: Array<{ id: string; name: string; mimeType: string; modifiedTime?: string; webViewLink?: string }> }>(session.accessToken, driveUrl),
+    requestGoogleService("gmail", async () => {
+      const mail = await googleGet<{ messages?: Array<{ id: string }>; resultSizeEstimate?: number }>(
+        session.accessToken, messagesUrl, "gmail",
+      );
+      const messages = await Promise.all((mail.messages ?? []).slice(0, includeMessageContent ? 3 : 5).map(async ({ id }) => {
+        const messageUrl = new URL(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${encodeURIComponent(id)}`);
+        messageUrl.searchParams.set("format", includeMessageContent ? "full" : "metadata");
+        for (const header of ["From", "Subject", "Date"]) messageUrl.searchParams.append("metadataHeaders", header);
+        const message = await googleGet<{
+          id: string;
+          snippet?: string;
+          payload?: GmailPart & { headers?: Array<{ name: string; value: string }> };
+        }>(session.accessToken, messageUrl, "gmail");
+        const headers = message.payload?.headers;
+        return {
+          id: message.id,
+          from: emailHeader(headers, "From"),
+          subject: emailHeader(headers, "Subject") || "(no subject)",
+          date: emailHeader(headers, "Date"),
+          snippet: message.snippet ?? "",
+          ...(includeMessageContent ? { body: plainTextBody(message.payload) } : {}),
+        };
+      }));
+      return { unreadEmails: mail.resultSizeEstimate ?? messages.length, messages };
+    }),
+    requestGoogleService("calendar", () =>
+      googleGet<{ items?: Array<{ id: string; summary?: string; start?: { dateTime?: string; date?: string }; end?: { dateTime?: string; date?: string }; htmlLink?: string }> }>(
+        session.accessToken, calendarUrl, "calendar",
+      ),
+    ),
+    requestGoogleService("drive", () =>
+      googleGet<{ files?: Array<{ id: string; name: string; mimeType: string; modifiedTime?: string; webViewLink?: string }> }>(
+        session.accessToken, driveUrl, "drive",
+      ),
+    ),
   ]);
-  const messages = await Promise.all((mailResult.messages ?? []).slice(0, includeMessageContent ? 3 : 5).map(async ({ id }) => {
-    const messageUrl = new URL(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${encodeURIComponent(id)}`);
-    messageUrl.searchParams.set("format", includeMessageContent ? "full" : "metadata");
-    for (const header of ["From", "Subject", "Date"]) messageUrl.searchParams.append("metadataHeaders", header);
-    const message = await googleGet<{
-      id: string;
-      snippet?: string;
-      payload?: GmailPart & { headers?: Array<{ name: string; value: string }> };
-    }>(session.accessToken, messageUrl);
-    const headers = message.payload?.headers;
-    return {
-      id: message.id,
-      from: emailHeader(headers, "From"),
-      subject: emailHeader(headers, "Subject") || "(no subject)",
-      date: emailHeader(headers, "Date"),
-      snippet: message.snippet ?? "",
-      ...(includeMessageContent ? { body: plainTextBody(message.payload) } : {}),
-    };
-  }));
+  const errors: NonNullable<GoogleWorkspaceSummary["errors"]> = {};
+  if (mailResult.error) errors.gmail = mailResult.error;
+  if (calendarResult.error) errors.calendar = calendarResult.error;
+  if (driveResult.error) errors.drive = driveResult.error;
 
   return {
     connected: true,
     email: session.email,
-    unreadEmails: mailResult.resultSizeEstimate ?? messages.length,
-    messages,
-    events: (calendarResult.items ?? []).map((event) => ({
+    unreadEmails: mailResult.data?.unreadEmails ?? 0,
+    messages: mailResult.data?.messages ?? [],
+    events: (calendarResult.data?.items ?? []).map((event) => ({
       id: event.id,
       title: event.summary || "(untitled event)",
       start: event.start?.dateTime ?? event.start?.date ?? "",
       end: event.end?.dateTime ?? event.end?.date ?? "",
       link: event.htmlLink,
     })),
-    files: (driveResult.files ?? []).map((file) => ({
+    files: (driveResult.data?.files ?? []).map((file) => ({
       id: file.id,
       name: file.name,
       mimeType: file.mimeType,
       modifiedTime: file.modifiedTime,
       link: file.webViewLink,
     })),
+    ...(Object.keys(errors).length ? { errors } : {}),
   };
 }
 
@@ -338,7 +396,7 @@ export async function fetchGoogleCalendarEvents(
     const calendarResult = await googleGet<{
       items?: typeof events;
       nextPageToken?: string;
-    }>(session.accessToken, calendarUrl);
+    }>(session.accessToken, calendarUrl, "calendar");
     events.push(...(calendarResult.items ?? []));
     pageToken = calendarResult.nextPageToken;
     if (pageToken && events.length >= 1000) {
