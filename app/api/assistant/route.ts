@@ -19,9 +19,25 @@ import { convertPrayerTimesToTimezone, fetchHararPrayerTimes } from "@/lib/praye
 import { isSameOrigin } from "@/lib/task-request";
 import { PLANNER_TIME_ZONE } from "@/lib/planner-datetime";
 import { extractAssistantFile } from "@/lib/assistant-files";
+import {
+  formatAIKnowledgeContext,
+  saveAIKnowledgeItem,
+  searchAIKnowledge,
+  syncTasksToShadowMemory,
+} from "@/lib/ai-memory";
+import type { AIKnowledgeMetadata, AIKnowledgeType } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 const MAX_MULTIPART_BYTES = 4 * 1024 * 1024;
+
+function isAIKnowledgeMetadata(value: unknown): value is AIKnowledgeMetadata {
+  return Boolean(
+    value && typeof value === "object" && !Array.isArray(value) &&
+    Object.values(value).every((item) =>
+      item === null || typeof item === "string" || typeof item === "boolean" ||
+      (typeof item === "number" && Number.isFinite(item))),
+  );
+}
 
 async function readMultipartForm(request: Request): Promise<FormData> {
   const contentType = request.headers.get("content-type");
@@ -120,12 +136,37 @@ export async function POST(request: Request) {
     values = body as Record<string, unknown>;
   }
 
-  if (Object.keys(values).some((key) => !["mode", "question", "date", "timezone", "taskId", "planning", "language", "sourceLanguage"].includes(key))) {
+  if (Object.keys(values).some((key) => ![
+    "mode", "question", "date", "timezone", "taskId", "planning", "language", "sourceLanguage",
+    "memoryType", "title", "content", "metadata",
+  ].includes(key))) {
     return NextResponse.json({ error: "The request contains an unsupported field." }, { status: 400 });
   }
-  const modes = ["suggest", "ask", "plan", "breakdown", "day", "insights", "research", "writing", "translate", "analyze", "autofill"];
+  const modes = ["suggest", "ask", "plan", "breakdown", "day", "insights", "research", "writing", "translate", "analyze", "autofill", "save_memory"];
   if (typeof values.mode !== "string" || !modes.includes(values.mode)) {
     return NextResponse.json({ error: "Choose a valid assistant action." }, { status: 400 });
+  }
+  if (values.mode === "save_memory") {
+    if (multipart ||
+        Object.keys(values).some((key) => !["mode", "memoryType", "title", "content", "metadata"].includes(key)) ||
+        (values.memoryType !== "research_note" && values.memoryType !== "file_excerpt") ||
+        typeof values.title !== "string" || typeof values.content !== "string" ||
+        (values.metadata !== undefined && !isAIKnowledgeMetadata(values.metadata))) {
+      return NextResponse.json({ error: "Send a valid AI memory item." }, { status: 400 });
+    }
+    try {
+      await saveAIKnowledgeItem({
+        type: values.memoryType as Extract<AIKnowledgeType, "research_note" | "file_excerpt">,
+        title: values.title,
+        content: values.content,
+        ...(values.metadata ? { metadata: values.metadata } : {}),
+      });
+      return NextResponse.json({ saved: true }, { headers: { "Cache-Control": "no-store" } });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "AI memory could not be saved.";
+      const status = message.startsWith("MongoDB") ? 503 : 400;
+      return NextResponse.json({ error: message }, { status, headers: { "Cache-Control": "no-store" } });
+    }
   }
   if (multipart && values.mode !== "analyze" && values.mode !== "autofill") {
     return NextResponse.json({ error: "Files can only be used for file analysis or database autofill." }, { status: 400 });
@@ -212,6 +253,30 @@ export async function POST(request: Request) {
   try {
     const needsPlannerData = ["suggest", "ask", "plan", "breakdown", "day", "insights", "autofill"].includes(values.mode as string);
     const tasks = needsPlannerData ? await fetchNotionTasks() : [];
+    if (tasks.length > 0) void syncTasksToShadowMemory(tasks);
+    if (!needsPlannerData && ["research", "analyze"].includes(values.mode as string) &&
+        process.env.MONGO_URI?.trim() &&
+        (process.env.NOTION_API_KEY?.trim() || process.env.NOTION_TOKEN?.trim()) &&
+        process.env.NOTION_DATABASE_ID?.trim()) {
+      void fetchNotionTasks()
+        .then(syncTasksToShadowMemory)
+        .catch((error: unknown) => {
+          console.warn("Notion task shadow sync could not load tasks.", {
+            errorName: error instanceof Error ? error.name : "UnknownError",
+          });
+        });
+    }
+    const semanticSearchModes = [
+      "suggest", "ask", "plan", "breakdown", "day", "insights", "autofill", "research", "analyze",
+    ];
+    const queryText = typeof values.question === "string" && values.question.trim()
+      ? values.question
+      : values.mode === "suggest" ? "Suggest the next actions for my current planner tasks."
+        : values.mode === "day" ? dayPreferences.instructions || "Plan my day using relevant planner context."
+          : "Find relevant planner context.";
+    const semanticContext = semanticSearchModes.includes(values.mode)
+      ? formatAIKnowledgeContext(await searchAIKnowledge({ queryText, limit: 8 }))
+      : "";
     if (values.mode === "plan") {
       const options = await fetchNotionTaskOptions();
       const plan = await getPlannerAssistantPlan(
@@ -220,11 +285,12 @@ export async function POST(request: Request) {
         options,
         values.date as string | undefined,
         values.timezone as string | undefined,
+        semanticContext,
       );
       return NextResponse.json({ plan }, { headers: { "Cache-Control": "no-store" } });
     }
     if (values.mode === "breakdown") {
-      const plan = await getPlannerAssistantBreakdown(tasks, values.taskId as string | undefined);
+      const plan = await getPlannerAssistantBreakdown(tasks, values.taskId as string | undefined, semanticContext);
       return NextResponse.json({ plan }, { headers: { "Cache-Control": "no-store" } });
     }
     if (values.mode === "day") {
@@ -240,7 +306,7 @@ export async function POST(request: Request) {
         values.timezone as string,
         prayerData.times,
       );
-      const plan = await getPlannerAssistantDayPlan(tasks, values.date as string, values.timezone as string, prayerTimes, dayPreferences);
+      const plan = await getPlannerAssistantDayPlan(tasks, values.date as string, values.timezone as string, prayerTimes, dayPreferences, semanticContext);
       await logActivity({
         userId,
         type: "ai_plan_generated",
@@ -254,7 +320,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ plan }, { headers: { "Cache-Control": "no-store" } });
     }
     if (values.mode === "research") {
-      const research = await getPlannerResearchAnswer(values.question as string);
+      const research = await getPlannerResearchAnswer(values.question as string, semanticContext);
       return NextResponse.json(research, { headers: { "Cache-Control": "no-store" } });
     }
     if (values.mode === "writing") {
@@ -270,19 +336,19 @@ export async function POST(request: Request) {
       return NextResponse.json({ answer }, { headers: { "Cache-Control": "no-store" } });
     }
     if (values.mode === "analyze") {
-      const answer = await getPlannerFileAnalysis(uploadedFile!, values.question as string);
+      const answer = await getPlannerFileAnalysis(uploadedFile!, values.question as string, semanticContext);
       return NextResponse.json({ answer }, { headers: { "Cache-Control": "no-store" } });
     }
     if (values.mode === "autofill") {
       const options = await fetchNotionTaskOptions();
-      const plan = await getPlannerDatabaseDraft(values.question as string, uploadedFile, tasks, options);
+      const plan = await getPlannerDatabaseDraft(values.question as string, uploadedFile, tasks, options, semanticContext);
       return NextResponse.json({ plan }, { headers: { "Cache-Control": "no-store" } });
     }
     if (values.mode === "insights") {
-      const answer = await getPlannerAssistantAnswer("insights", values.question as string, tasks);
+      const answer = await getPlannerAssistantAnswer("insights", values.question as string, tasks, semanticContext);
       return NextResponse.json({ answer }, { headers: { "Cache-Control": "no-store" } });
     }
-    const answer = await getPlannerAssistantAnswer(values.mode as "suggest" | "ask", values.question as string | undefined, tasks);
+    const answer = await getPlannerAssistantAnswer(values.mode as "suggest" | "ask", values.question as string | undefined, tasks, semanticContext);
     return NextResponse.json({ answer }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     const message = error instanceof Error ? error.message : "The planner assistant could not respond.";

@@ -123,6 +123,8 @@ export function PlannerAssistant({
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState("");
   const [sources, setSources] = useState<ResearchSource[]>([]);
+  const [memorySaved, setMemorySaved] = useState(false);
+  const [memorySaving, setMemorySaving] = useState(false);
   const [error, setError] = useState("");
   const [pendingChange, setPendingChange] = useState<PlannerChange | null>(null);
   const [breakdown, setBreakdown] = useState<BreakdownPlan | null>(null);
@@ -148,6 +150,7 @@ export function PlannerAssistant({
     setError("");
     setAnswer("");
     setSources([]);
+    setMemorySaved(false);
     setPendingChange(null);
     setBreakdown(null);
     setDayPlan(null);
@@ -240,6 +243,45 @@ export function PlannerAssistant({
       setLoading(false);
     }
   }, [availableHours, energyLevel, options, planningDate, planningInstructions, question, selectedAreas, selectedCourses, selectedFile, sourceLanguage, studyEnd, studyStart, targetLanguage, tasks]);
+
+  async function saveAnswerToMemory() {
+    if (!answer || memorySaving || memorySaved ||
+        (assistantMode !== "research" && assistantMode !== "analyze")) return;
+    const memoryType = assistantMode === "research" ? "research_note" : "file_excerpt";
+    const title = assistantMode === "research" ? question.trim() : selectedFile?.name;
+    if (!title) {
+      setError("The source title is unavailable, so this result cannot be saved.");
+      return;
+    }
+
+    setMemorySaving(true);
+    setError("");
+    try {
+      const response = await fetch("/api/assistant", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: "save_memory",
+          memoryType,
+          title: title.slice(0, 200),
+          content: answer,
+          metadata: {
+            question: question.slice(0, 1_000),
+            ...(assistantMode === "research" ? { source: "tavily" } : { fileName: title.slice(0, 250) }),
+          },
+        }),
+      });
+      const result = await readApiResponse<{ saved?: boolean; error?: string }>(response);
+      if (!response.ok || !result.saved) {
+        throw new Error(result.error ?? "AI memory could not be saved.");
+      }
+      setMemorySaved(true);
+    } catch (saveError) {
+      setError(apiErrorMessage(saveError, "AI memory could not be saved."));
+    } finally {
+      setMemorySaving(false);
+    }
+  }
 
   function submitInstruction(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -506,6 +548,9 @@ export function PlannerAssistant({
           <span>Assistant tool</span>
           <select value={assistantMode} onChange={(event) => {
             setAssistantMode(event.target.value as AssistantMode);
+            setAnswer("");
+            setSources([]);
+            setMemorySaved(false);
             setError("");
           }}>
             <option value="plan">Planner: ask, create, or edit tasks</option>
@@ -568,6 +613,15 @@ export function PlannerAssistant({
         ? "Connect Google Workspace above to use the personal secretary."
         : "Connect to Notion and load your tasks to plan or autofill database items."}</p>}
       {answer && <div className="assistant-response" role="status" aria-live="polite"><AssistantMarkdown text={answer} /></div>}
+      {answer && (assistantMode === "research" || assistantMode === "analyze") && (
+        <div className="assistant-proposal-actions">
+          <button type="button" className="assistant-confirm" onClick={() => void saveAnswerToMemory()}
+            disabled={memorySaving || memorySaved}>
+            {memorySaving ? <LoaderCircle size={13} className="spin" /> : <Check size={13} />}
+            {memorySaved ? "Saved to AI Memory" : "Save to AI Memory"}
+          </button>
+        </div>
+      )}
       {sources.length > 0 && (
         <div className="assistant-sources" aria-label="Web research sources">
           <strong>Sources</strong>
@@ -715,7 +769,7 @@ export function PlannerAssistant({
       )}
       {error && <div className="assistant-response assistant-error" role="alert">{error}</div>}
       <p className="assistant-privacy">
-        Planner details go to Google Gemini only for planner actions. Research queries and search snippets go to Tavily and Gemini; uploaded files are processed temporarily and not stored by this app. Notion changes are previewed and require your confirmation.
+        Planner details go to Google Gemini only for planner actions. Research queries and search snippets go to Tavily and Gemini; uploaded files are processed temporarily and only an analysis summary is stored if you choose Save to AI Memory. Notion changes are previewed and require your confirmation.
       </p>
     </section>
   );

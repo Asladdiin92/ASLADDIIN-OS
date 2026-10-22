@@ -33,6 +33,33 @@ export type Task = {
   completed: boolean;
 };
 
+export type AIKnowledgeType =
+  | "notion_task_shadow"
+  | "ai_skill"
+  | "research_note"
+  | "file_excerpt";
+
+export type AIKnowledgeMetadataValue = string | number | boolean | null;
+
+export type AIKnowledgeMetadata = Record<string, AIKnowledgeMetadataValue>;
+
+export type AIKnowledgeItemInput = {
+  type: Exclude<AIKnowledgeType, "notion_task_shadow">;
+  title: string;
+  content: string;
+  metadata?: AIKnowledgeMetadata;
+};
+
+export type AIKnowledgeSearchResult = {
+  title: string;
+  content: string;
+  type: AIKnowledgeType;
+  sourceId?: string;
+  area?: string;
+  courseCode?: string;
+  score: number;
+};
+
 export type TaskOptions = {
   types: string[];
   statuses: string[];
