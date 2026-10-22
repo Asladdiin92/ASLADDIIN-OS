@@ -21,6 +21,7 @@ import {
   ListChecks,
   LoaderCircle,
   LucideIcon,
+  Mail,
   Menu,
   Pencil,
   Plus,
@@ -47,6 +48,7 @@ import { DailyBriefingPanel } from "@/components/daily-briefing";
 import { RecentActivityTimeline } from "@/components/recent-activity-timeline";
 import { MetricsGrid } from "@/components/dashboard-metrics";
 import { ProviderIntegrations } from "@/components/provider-integrations";
+import { GoogleConnectionCard, GoogleWorkspacePage, WorkspaceAttention } from "@/components/google-workspace";
 import type { Task, TaskOptions, TasksResponse } from "@/lib/types";
 import type { GoogleWorkspaceSummary } from "@/lib/google-types";
 import { apiErrorMessage, readApiResponse } from "@/lib/api-response";
@@ -81,7 +83,7 @@ const emptyGoogleSummary: GoogleWorkspaceSummary = {
   files: [],
 };
 const dashboardTabs = [
-  "overview", "planner-assistant", "tasks", "projects", "notes", "calendar", "progress", "integrations",
+  "overview", "planner-assistant", "tasks", "projects", "notes", "calendar", "progress", "integrations", "google-workspace",
   "goals", "knowledge", "system-activity", "completed-work", "project-progress", "reviews", "ai-observations",
   "appearance", "notifications", "privacy", "authentication", "ai-preferences", "integration-permissions", "data-controls",
 ];
@@ -207,6 +209,7 @@ function Sidebar({
       label: "INTEGRATIONS",
       items: [
         { id: "integrations", label: "Integrations", icon: Columns3, target: "integrations" },
+        { id: "google-workspace", label: "Google Workspace", icon: Mail, target: "google-workspace" },
       ],
     },
     {
@@ -1049,6 +1052,7 @@ export default function DashboardPage() {
     progress: "Activity & Insights",
     "planner-assistant": "AI Assistant",
     integrations: "Integrations",
+    "google-workspace": "Google Workspace",
     goals: "Goals",
     knowledge: "Knowledge",
     "system-activity": "System activity",
@@ -1237,6 +1241,13 @@ export default function DashboardPage() {
             </section>
           </section>
 
+          <WorkspaceAttention
+            summary={googleSummary}
+            loaded={googleSummaryLoaded}
+            loading={googleLoading}
+            onOpenWorkspace={() => selectTab("google-workspace")}
+          />
+
           <NextBestActionPanel
             disabled={state !== "ready"}
             refreshKey={dashboardRefreshKey}
@@ -1281,28 +1292,28 @@ export default function DashboardPage() {
                 </div>
                 {state === "error" && <p className="google-workspace-error" role="alert">{error}</p>}
               </section>
-              <section className="panel google-workspace-panel" aria-labelledby="google-workspace-title">
-                <div className="panel-heading google-workspace-heading">
-                  <div><h2 id="google-workspace-title">Google Workspace</h2><p>{googleSummary.connected ? `Connected as ${googleSummary.email}` : "Connect Gmail, Calendar, and Drive for an on-demand AI briefing."}</p></div>
-                  <div className="google-workspace-actions">
-                    {googleSummary.connected
-                      ? <button type="button" className="refresh-button" onClick={() => void loadGoogleSummary(true)} disabled={googleLoading}>{googleLoading ? "Refreshing..." : "Refresh"}</button>
-                      : <a className="google-connect-button" href="/api/google/connect">Connect Google</a>}
-                    {googleSummary.connected && <button type="button" className="google-disconnect-button" onClick={() => void handleGoogleDisconnect()}>Disconnect</button>}
-                  </div>
-                </div>
-                {googleError && <p className="google-workspace-error" role="alert">{googleError}</p>}
-                {googleSummary.connected && <>
-                  <div className="google-workspace-counts"><span><strong>{googleSummary.unreadEmails}</strong> unread emails</span><span><strong>{meetingsToday}</strong> meetings today</span><span><strong>{googleSummary.files.length}</strong> recent Drive files</span></div>
-                  <div className="google-workspace-data">
-                    <div><h3>Unread email</h3>{googleSummary.messages.slice(0, 3).map((message) => <article key={message.id}><strong>{message.subject}</strong><span>{message.from}</span><p>{message.snippet}</p></article>)}{googleSummary.messages.length === 0 && <p className="google-workspace-empty">No unread messages found.</p>}</div>
-                    <div><h3>Upcoming calendar</h3>{googleSummary.events.slice(0, 4).map((event) => <a key={event.id} href={event.link || "#calendar"} target={event.link ? "_blank" : undefined} rel={event.link ? "noreferrer" : undefined}><time>{event.start ? formatDate(event.start) : "Scheduled"}</time><strong>{event.title}</strong></a>)}{googleSummary.events.length === 0 && <p className="google-workspace-empty">No upcoming events this week.</p>}</div>
-                    <div><h3>Recent Drive files</h3>{googleSummary.files.slice(0, 4).map((file) => <a key={file.id} href={file.link || "#"} target={file.link ? "_blank" : undefined} rel={file.link ? "noreferrer" : undefined}><BookOpen size={13} /><span>{file.name}</span></a>)}{googleSummary.files.length === 0 && <p className="google-workspace-empty">No recent files found.</p>}</div>
-                  </div>
-                </>}
-              </section>
+              <GoogleConnectionCard
+                summary={googleSummary}
+                loaded={googleSummaryLoaded}
+                loading={googleLoading}
+                error={googleError}
+                onRefresh={(showToast) => void loadGoogleSummary(showToast)}
+                onDisconnect={() => void handleGoogleDisconnect()}
+                onOpenWorkspace={() => selectTab("google-workspace")}
+              />
               <ProviderIntegrations />
             </section>
+          </div>
+
+          <div className={`tab-content${activeTab === "google-workspace" ? " is-active" : ""}`} id="google-workspace-tab" role="region" aria-labelledby="nav-google-workspace" aria-hidden={activeTab !== "google-workspace"}>
+            <GoogleWorkspacePage
+              summary={googleSummary}
+              loaded={googleSummaryLoaded}
+              loading={googleLoading}
+              error={googleError}
+              onRefresh={(showToast) => void loadGoogleSummary(showToast)}
+              onOpenIntegrations={() => selectTab("integrations")}
+            />
           </div>
 
           <div className={`tab-content${activeTab === "progress" ? " is-active" : ""}`} id="progress-tab" role="region" aria-labelledby="nav-progress" aria-hidden={activeTab !== "progress"}>
