@@ -4,13 +4,14 @@ export type GoogleMessageClassification = {
 };
 
 const attentionPattern = /\b(action required|action needed|urgent|deadline|verify your account|review requested|approval required|response required|payment due)\b/i;
+const possibleReplyPattern = /\b(please (?:reply|respond|confirm)|response requested|let me know|could you|can you|would you|reply by|respond by)\b/i;
 const securityPattern = /\b(security|password|sign[- ]in|login|two[- ]factor|2fa|verification code|suspicious activity|new device)\b/i;
 const academicPattern = /\b(university|college|campus|course|class|lecture|assignment|exam|grade|semester|academic)\b/i;
 const developmentPattern = /\b(github|gitlab|vercel|npm|pull request|deployment|build failed|ci\/cd|commit|repository)\b/i;
 const automatedPattern = /\b(no[- ]?reply|automated|notification|digest|newsletter|do not reply)\b/i;
 
-export function sanitizeGmailSnippet(value: string, maxLength = 180): string {
-  const sanitized = value
+export function sanitizeProviderText(value: string, maxLength = 500): string {
+  const sanitized = (typeof value === "string" ? value : "")
     .replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, " ")
     .replace(/<[^>]*>/g, " ")
     .replace(/&(?:amp|quot|apos|lt|gt|nbsp);/gi, (entity) => ({
@@ -29,6 +30,17 @@ export function sanitizeGmailSnippet(value: string, maxLength = 180): string {
   return `${sanitized.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…`;
 }
 
+export function sanitizeGmailSnippet(value: string, maxLength = 180): string {
+  return sanitizeProviderText(value, maxLength);
+}
+
+export function maskGoogleEmail(email: string | undefined): string {
+  if (!email) return "Unavailable";
+  const [localPart, domain, ...extra] = email.split("@");
+  if (!localPart || !domain || extra.length > 0) return "Google account";
+  return `${localPart.slice(0, Math.min(4, localPart.length))}****@${domain}`;
+}
+
 export function classifyGoogleMessage(message: {
   from: string;
   subject: string;
@@ -40,6 +52,10 @@ export function classifyGoogleMessage(message: {
 
   if (attentionPattern.test(`${message.subject} ${message.snippet}`)) {
     add("Needs attention", "Subject or snippet contains explicit action wording.");
+  }
+  const replyMatch = `${message.subject} ${message.snippet}`.match(possibleReplyPattern);
+  if (replyMatch) {
+    add("Possible reply", `Explicit request wording matched: “${replyMatch[0]}”. This is a suggestion, not a reply requirement.`);
   }
   if (securityPattern.test(content)) {
     add("Security", "Sender, subject, or snippet contains security-related wording.");
@@ -54,9 +70,11 @@ export function classifyGoogleMessage(message: {
     add("Automated notifications", "Sender or subject indicates automated mail.");
   }
 
-  return categories.length
-    ? categories
-    : [{ category: "Uncategorized", reason: "No local classification rule matched." }];
+  if (categories.length === 0) {
+    return [{ category: "Uncategorized", reason: "No local classification rule matched." }];
+  }
+
+  return categories;
 }
 
 export function formatGmailReceivedTime(value: string, now = Date.now()): {

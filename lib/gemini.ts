@@ -4,6 +4,7 @@ import type { PrayerTimes } from "@/lib/prayer-times";
 import { plannerDateKey, todayInPlannerTimeZone } from "@/lib/planner-datetime";
 import type { AssistantFileContent } from "@/lib/assistant-files";
 import type { GoogleWorkspaceSummary } from "@/lib/google-types";
+import { buildGoogleBriefingInput } from "@/lib/google-workspace-insights";
 import type { FocusWindow, NextActionCandidate } from "@/lib/next-action";
 
 const GEMINI_MODELS = ["gemini-3.8-flash", "gemini-3.5-flash-lite"];
@@ -746,14 +747,7 @@ export async function getPersonalSecretaryAnswer(
   workspace: GoogleWorkspaceSummary,
 ): Promise<string> {
   const taskSummary = plannerData(tasks);
-  const googleData = {
-    unreadEmails: workspace.unreadEmails,
-    recentUnreadMessages: workspace.messages.map(({ from, subject, date, snippet, body }) => ({
-      from, subject, date, snippet, body: body?.slice(0, 3000),
-    })),
-    nextCalendarEvents: workspace.events,
-    recentDriveFiles: workspace.files,
-  };
+  const googleData = buildGoogleBriefingInput(workspace);
   return generateGeminiText(JSON.stringify({
     system_instruction: {
       parts: [{
