@@ -1,0 +1,8 @@
+{
+  "name": "ASLADDIIN OS",
+  "description": "Personal productivity, AI assistant, and operations platform.",
+  "permissions": [],
+  "capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
