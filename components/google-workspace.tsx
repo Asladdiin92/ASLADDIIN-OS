@@ -15,6 +15,7 @@ type GoogleWorkspaceDataProps = {
 };
 
 type GoogleConnectionCardProps = GoogleWorkspaceDataProps & {
+  lastSyncedAt: string | null;
   onDisconnect: () => void;
   onOpenWorkspace: () => void;
 };
@@ -51,6 +52,35 @@ function displayDate(value: string): string {
 
 function GoogleServiceError({ message }: { message: string | undefined }) {
   return message ? <p className="google-service-error" role="status">{message}</p> : null;
+}
+
+function maskEmail(email: string | undefined): string {
+  if (!email) return "Unavailable";
+  const [localPart, domain, ...extra] = email.split("@");
+  if (!localPart || !domain || extra.length > 0) return "Google account";
+  return `${localPart.slice(0, Math.min(4, localPart.length))}****@${domain}`;
+}
+
+function formatRelativeTime(value: string | null): string {
+  if (!value) return "Not synchronized yet";
+  const timestamp = new Date(value).getTime();
+  if (!Number.isFinite(timestamp)) return "Not synchronized yet";
+
+  const elapsedSeconds = Math.max(0, Math.floor((Date.now() - timestamp) / 1000));
+  if (elapsedSeconds < 60) return "just now";
+  let name: string;
+  let count: number;
+  if (elapsedSeconds < 3600) {
+    name = "minute";
+    count = Math.floor(elapsedSeconds / 60);
+  } else if (elapsedSeconds < 86_400) {
+    name = "hour";
+    count = Math.floor(elapsedSeconds / 3600);
+  } else {
+    name = "day";
+    count = Math.floor(elapsedSeconds / 86_400);
+  }
+  return `${count} ${name}${count === 1 ? "" : "s"} ago`;
 }
 
 export function WorkspaceAttention({
@@ -115,51 +145,69 @@ export function GoogleConnectionCard({
   loaded,
   loading,
   error,
+  lastSyncedAt,
   onRefresh,
   onDisconnect,
   onOpenWorkspace,
 }: GoogleConnectionCardProps) {
-  const failedServices = Object.keys(summary.errors ?? {});
-  const status = !loaded && loading
-    ? "Checking connection"
-    : !summary.connected
-      ? "Not connected"
-      : failedServices.length
-        ? "Partially available"
-        : "Connected";
+  const serviceStatuses = [
+    { key: "gmail", label: "Gmail" },
+    { key: "calendar", label: "Calendar" },
+    { key: "drive", label: "Drive" },
+  ] as const;
+  const overallRefreshFailed = Boolean(error) && !Object.keys(summary.errors ?? {}).length;
+  const serviceStatus = (service: typeof serviceStatuses[number]["key"]) => {
+    if (!summary.connected) return "Unavailable";
+    if (summary.errors?.[service] || overallRefreshFailed) return "Error";
+    return "Connected";
+  };
 
   return (
     <section className="panel google-connection-card" aria-labelledby="google-connection-title">
       <div className="panel-heading">
         <div>
           <h2 id="google-connection-title"><Cloud size={15} /> Google Workspace</h2>
-          <p>{summary.connected ? `Connected${summary.email ? ` as ${summary.email}` : ""}` : "Connect Google to use Workspace features."}</p>
+          <p>Connected account: {summary.connected ? maskEmail(summary.email) : "Not connected"}</p>
+          <p>Last synchronized: {formatRelativeTime(lastSyncedAt)}</p>
         </div>
-        <span className={`provider-status${summary.connected && !failedServices.length ? " is-connected" : ""}`}>
-          <i />{status}
-        </span>
+        {!loaded && loading && <span className="provider-status"><i />Checking connection</span>}
       </div>
-      {error && <p className="google-workspace-error" role="alert">{error}</p>}
-      {failedServices.length > 0 && (
-        <p className="google-connection-health-note" role="status">
-          {failedServices.map((service) => `${service[0].toUpperCase()}${service.slice(1)}`).join(", ")} data could not be loaded.
-        </p>
+      <ul className="google-service-statuses" aria-label="Google service status">
+        {serviceStatuses.map(({ key, label }) => {
+          const status = serviceStatus(key);
+          return (
+            <li key={key}>
+              <span>{label}</span>
+              <span className={`google-service-state is-${status.toLowerCase()}`}><i />{status}</span>
+            </li>
+          );
+        })}
+      </ul>
+      <p className="google-connection-counts" aria-label="Google Workspace summary">
+        {serviceStatus("gmail") === "Connected" ? summary.unreadEmails : "—"} unread
+        <span aria-hidden="true"> • </span>
+        {serviceStatus("calendar") === "Connected" ? summary.events.length : "—"} upcoming
+        <span aria-hidden="true"> • </span>
+        {serviceStatus("drive") === "Connected" ? summary.files.length : "—"} files
+      </p>
+      {error && !Object.keys(summary.errors ?? {}).length && (
+        <p className="google-connection-health-note" role="alert">Google Workspace could not be refreshed. Check the service status above and try again.</p>
       )}
       <div className="google-connection-actions">
         {summary.connected ? (
           <>
             <button type="button" className="refresh-button" onClick={() => onRefresh(true)} disabled={loading}>
-              {loading ? <LoaderCircle size={12} className="spin" /> : <RefreshCw size={12} />} Check connection
+              {loading ? <LoaderCircle size={12} className="spin" /> : <RefreshCw size={12} />} Refresh
             </button>
+            <a className="provider-secondary-button" href="https://myaccount.google.com/permissions" target="_blank" rel="noreferrer">
+              Manage permissions
+            </a>
             <button type="button" className="google-disconnect-button" onClick={onDisconnect}>Disconnect</button>
-            <button type="button" className="provider-secondary-button" onClick={onOpenWorkspace}>Open Workspace</button>
           </>
         ) : (
-          <>
-            <a className="google-connect-button" href="/api/google/connect">Connect Google</a>
-            <button type="button" className="provider-secondary-button" onClick={onOpenWorkspace}>Workspace details</button>
-          </>
+          <a className="google-connect-button" href="/api/google/connect">Connect Google</a>
         )}
+        <button type="button" className="provider-secondary-button" onClick={onOpenWorkspace}>Open Google Workspace</button>
       </div>
     </section>
   );

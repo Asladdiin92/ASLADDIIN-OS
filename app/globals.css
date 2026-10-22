@@ -1313,6 +1313,13 @@ body::before { position: fixed; z-index: -1; inset: 0; background: radial-gradie
 .provider-status { display: inline-flex; align-items: center; gap: 6px; padding: 6px 8px; border: 1px solid #eab16d35; border-radius: 99px; background: #291e13c9; color: #f3cc8c; font: 8px var(--font-mono); white-space: nowrap; }
 .provider-status i { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
 .provider-status.is-connected { border-color: #26df9840; background: #0d2b20a8; color: #8ee5b6; }
+.google-service-statuses { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0; padding: 0; list-style: none; }
+.google-service-statuses li { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; padding: 8px 9px; border: 1px solid #42e6ac20; border-radius: 7px; background: #081713a8; color: #c4d8cc; font: 8px var(--font-mono); }
+.google-service-state { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; color: #8ee5b6; }
+.google-service-state i { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+.google-service-state.is-error { color: #f3cc8c; }
+.google-service-state.is-unavailable { color: #91a39a; }
+.google-connection-counts { margin: 0; color: #9ab4a6; font: 8px var(--font-mono); }
 .google-connection-health-note { margin: 0; color: #dfbd83; font: 8px/1.5 var(--font-mono); }
 .google-connection-actions { display: flex; flex-wrap: wrap; gap: 7px; }
 .google-connection-actions .refresh-button, .google-connection-actions .google-disconnect-button, .provider-secondary-button { min-height: 31px; padding: 0 9px; border: 1px solid #2edc9a3b; border-radius: 7px; background: #0d241a; color: #9ee9c5; font: 8px var(--font-mono); }
@@ -1391,6 +1398,7 @@ a.workspace-event:hover, a.workspace-file:hover { color: #8ef2c4; text-decoratio
   .workspace-attention-next { grid-template-columns: 1fr; }
   .workspace-attention-next span { grid-column: auto; }
   .google-connection-card .panel-heading { align-items: flex-start; flex-direction: column; }
+  .google-service-statuses { grid-template-columns: 1fr; }
   .google-workspace-page .section-heading { align-items: flex-start; flex-direction: column; gap: 9px; }
   .google-workspace-page .section-heading .google-workspace-actions { justify-content: flex-start; }
   .workspace-data-heading { flex-direction: column; }

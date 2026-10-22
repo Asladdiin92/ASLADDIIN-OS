@@ -771,6 +771,7 @@ export default function DashboardPage() {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [googleSummaryLoaded, setGoogleSummaryLoaded] = useState(false);
   const [googleError, setGoogleError] = useState("");
+  const [googleLastSyncedAt, setGoogleLastSyncedAt] = useState<string | null>(null);
 
   const notify = useCallback((message: string, tone: "success" | "error" | "info" = "success") => {
     setToast({ message, tone });
@@ -838,9 +839,19 @@ export default function DashboardPage() {
     try {
       const response = await fetch("/api/google/summary", { cache: "no-store" });
       const result = await readApiResponse<GoogleWorkspaceSummary & { error?: string }>(response);
-      if (response.status === 401) setGoogleSummary(emptyGoogleSummary);
+      if (response.status === 401) {
+        setGoogleSummary(emptyGoogleSummary);
+        setGoogleLastSyncedAt(null);
+      }
       if (!response.ok) throw new Error(result.error ?? "Google session expired. Reconnect your Google account.");
       setGoogleSummary(result);
+      const successfulServices = (["gmail", "calendar", "drive"] as const)
+        .filter((service) => !result.errors?.[service]);
+      if (result.connected && successfulServices.length > 0) {
+        setGoogleLastSyncedAt(new Date().toISOString());
+      } else if (!result.connected) {
+        setGoogleLastSyncedAt(null);
+      }
       const serviceErrors = Object.entries(result.errors ?? {}).map(([service, message]) => {
         const name = service === "gmail" ? "Gmail" : service === "calendar" ? "Google Calendar" : "Google Drive";
         return `${name}: ${message}`;
@@ -973,6 +984,7 @@ export default function DashboardPage() {
       const result = await readApiResponse<{ error?: string }>(response);
       if (!response.ok) throw new Error(result.error ?? "Could not disconnect Google.");
       setGoogleSummary(emptyGoogleSummary);
+      setGoogleLastSyncedAt(null);
       notify("Google Workspace disconnected and access revoked.");
     } catch (disconnectError) {
       const message = apiErrorMessage(disconnectError, "Could not disconnect Google.");
@@ -1297,6 +1309,7 @@ export default function DashboardPage() {
                 loaded={googleSummaryLoaded}
                 loading={googleLoading}
                 error={googleError}
+                lastSyncedAt={googleLastSyncedAt}
                 onRefresh={(showToast) => void loadGoogleSummary(showToast)}
                 onDisconnect={() => void handleGoogleDisconnect()}
                 onOpenWorkspace={() => selectTab("google-workspace")}
