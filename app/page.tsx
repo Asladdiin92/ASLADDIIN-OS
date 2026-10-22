@@ -190,6 +190,7 @@ function Sidebar({
         { id: "notes", label: "Notes", icon: StickyNote, target: "notes" },
         { id: "projects", label: "Projects", icon: GitBranch, target: "projects", count: projectCount, badge: "projects-badge" },
         { id: "calendar", label: "Calendar", icon: CalendarDays, target: "calendar", count: meetingCount, badge: "calendar-badge" },
+        { id: "google-workspace", label: "Google Workspace", icon: Mail, target: "google-workspace" },
         { id: "goals", label: "Goals", icon: Target, target: "goals" },
         { id: "knowledge", label: "Knowledge", icon: BookOpen, target: "knowledge" },
       ],
@@ -209,7 +210,6 @@ function Sidebar({
       label: "INTEGRATIONS",
       items: [
         { id: "integrations", label: "Integrations", icon: Columns3, target: "integrations" },
-        { id: "google-workspace", label: "Google Workspace", icon: Mail, target: "google-workspace" },
       ],
     },
     {

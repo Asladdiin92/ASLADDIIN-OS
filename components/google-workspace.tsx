@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { ArrowUpRight, CalendarDays, Cloud, FileText, LoaderCircle, Mail, RefreshCw, Sparkles } from "lucide-react";
 import { apiErrorMessage, readApiResponse } from "@/lib/api-response";
+import { classifyGoogleMessage, formatGmailReceivedTime, sanitizeGmailSnippet } from "@/lib/google-gmail";
 import { formatPlannerDate, plannerDateKey, todayInPlannerTimeZone } from "@/lib/planner-datetime";
 import type { GoogleWorkspaceSummary } from "@/lib/google-types";
 
@@ -289,20 +290,47 @@ export function GoogleWorkspacePage({
           <div className="workspace-data-grid">
             <section className="panel workspace-data-panel" aria-labelledby="workspace-gmail-title">
               <div className="workspace-data-heading">
-                <div><span className="workspace-data-icon"><Mail size={15} /></span><div><h3 id="workspace-gmail-title">Unread Gmail</h3><p>{summary.unreadEmails} unread · showing up to {summary.messages.length} returned messages</p></div></div>
+                <div><span className="workspace-data-icon"><Mail size={15} /></span><div><h3 id="workspace-gmail-title">Unread Gmail</h3><p>Total unread: {summary.unreadEmails} · showing {summary.messages.length} recent messages</p></div></div>
                 <span className="workspace-source-label">DIRECT GOOGLE DATA</span>
               </div>
+              <p className="workspace-gmail-classification-note">
+                Local categories use visible sender, subject, and snippet wording. “Needs attention” requires explicit action wording; no reply requirement is inferred.
+              </p>
               <GoogleServiceError message={summary.errors?.gmail} />
               {!summary.errors?.gmail && summary.messages.length === 0
                 ? <p className="workspace-data-empty">No unread messages were returned by Google.</p>
-                : <div className="workspace-message-list">{summary.messages.map((message) => (
-                  <article className="workspace-message" key={message.id}>
-                    <div className="workspace-message-topline"><strong>{message.subject}</strong><time>{message.date}</time></div>
-                    <span>{message.from || "Sender not returned"}</span>
-                    {message.snippet && <p>{message.snippet}</p>}
-                    <span className="workspace-deterministic-label">Unread · Google query result</span>
-                  </article>
-                ))}</div>}
+                : <div className="workspace-message-list">{summary.messages.map((message) => {
+                  const received = formatGmailReceivedTime(message.date);
+                  const snippet = sanitizeGmailSnippet(message.snippet);
+                  const classifications = classifyGoogleMessage({
+                    from: message.from,
+                    subject: message.subject,
+                    snippet,
+                  });
+                  const receivedDate = new Date(message.date);
+                  const gmailUrl = `https://mail.google.com/mail/u/0/#all/${encodeURIComponent(message.id)}`;
+                  return (
+                    <article className="workspace-message" key={message.id}>
+                      <div className="workspace-message-topline">
+                        <strong>{message.subject}</strong>
+                        <time dateTime={Number.isNaN(receivedDate.getTime()) ? undefined : receivedDate.toISOString()} title={received.absolute}>{received.relative}</time>
+                      </div>
+                      <span>{message.from || "Sender not returned"}</span>
+                      {snippet && <p>{snippet}</p>}
+                      <div className="workspace-message-meta">
+                        <span className="workspace-deterministic-label">Unread · Google query result</span>
+                        <div className="workspace-message-categories" aria-label="Local deterministic categories">
+                          {classifications.map(({ category, reason }) => (
+                            <span className="workspace-message-category" title={reason} key={category}>{category}</span>
+                          ))}
+                        </div>
+                      </div>
+                      <a className="workspace-open-gmail" href={gmailUrl} target="_blank" rel="noreferrer">
+                        Open in Gmail <ArrowUpRight size={11} />
+                      </a>
+                    </article>
+                  );
+                })}</div>}
             </section>
 
             <section className="panel workspace-data-panel" aria-labelledby="workspace-calendar-title">
