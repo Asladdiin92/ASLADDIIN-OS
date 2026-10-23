@@ -11,10 +11,13 @@ import {
   ListChecks,
   NotebookPen,
   RefreshCw,
+  ScanEye,
   Sparkles,
   Timer,
   type LucideIcon,
   ArrowUpRight,
+  UserRoundPen,
+  UserRoundPlus,
 } from "lucide-react";
 import { apiErrorMessage, readApiResponse } from "@/lib/api-response";
 
@@ -29,7 +32,10 @@ type ActivityType =
   | "focus_completed"
   | "ai_plan_generated"
   | "ai_recommendation_generated"
-  | "notion_sync_completed";
+  | "notion_sync_completed"
+  | "contact_synced"
+  | "contact_updated"
+  | "vision_analyzed";
 
 type Activity = {
   id: string;
@@ -63,6 +69,9 @@ const ACTIVITY_PRESENTATION: Record<ActivityType, { icon: LucideIcon; tone: stri
   ai_plan_generated: { icon: Sparkles, tone: "activity-tone-violet" },
   ai_recommendation_generated: { icon: Sparkles, tone: "activity-tone-violet" },
   notion_sync_completed: { icon: RefreshCw, tone: "activity-tone-cyan" },
+  contact_synced: { icon: UserRoundPlus, tone: "activity-tone-cyan" },
+  contact_updated: { icon: UserRoundPen, tone: "activity-tone-violet" },
+  vision_analyzed: { icon: ScanEye, tone: "activity-tone-violet" },
 };
 
 const SOURCE_LABELS: Record<string, string> = {

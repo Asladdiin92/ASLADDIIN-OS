@@ -16,6 +16,9 @@ export const ACTIVITY_TYPES = [
   "ai_plan_generated",
   "ai_recommendation_generated",
   "notion_sync_completed",
+  "contact_synced",
+  "contact_updated",
+  "vision_analyzed",
 ] as const;
 
 export const ACTIVITY_SOURCES = ["notion", "dashboard", "ai", "focus", "system"] as const;

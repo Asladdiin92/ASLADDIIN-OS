@@ -54,6 +54,17 @@ export async function ensureMongoIndexes(): Promise<void> {
       { userId: 1, idempotencyKey: 1 },
       { unique: true, partialFilterExpression: { idempotencyKey: { $type: "string" } } },
     ),
+    appDb.collection("workspace_contacts").createIndex(
+      { userId: 1, resourceName: 1 },
+      { unique: true },
+    ),
+    appDb.collection("workspace_contacts").createIndex({ userId: 1, updatedAt: -1 }),
+    appDb.collection("workspace_contacts").createIndex({ userId: 1, email: 1 }),
+    appDb.collection("vision_analyses").createIndex(
+      { userId: 1, analysisId: 1 },
+      { unique: true },
+    ),
+    appDb.collection("vision_analyses").createIndex({ userId: 1, createdAt: -1 }),
     appDb.collection("ai_recommendations").createIndex(
       { userId: 1, taskId: 1 },
       { unique: true },
