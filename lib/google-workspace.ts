@@ -10,13 +10,14 @@ const GOOGLE_SCOPES = [
   "openid",
   "email",
   "https://mail.google.com/",
+  "https://www.googleapis.com/auth/contacts",
   "https://www.googleapis.com/auth/calendar.events",
   "https://www.googleapis.com/auth/drive",
 ];
 const GOOGLE_REQUEST_TIMEOUT_MS = 15_000;
 
 type OAuthState = { userId: string; nonce: string; expiresAt: number };
-type GoogleSession = { userId: string; email: string; accessToken: string; expiresAt: number };
+export type GoogleSession = { userId: string; email: string; accessToken: string; expiresAt: number };
 type GoogleService = "gmail" | "calendar" | "drive";
 type GmailPart = {
   mimeType?: string;

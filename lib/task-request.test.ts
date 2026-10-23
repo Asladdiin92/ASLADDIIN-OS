@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { parseTaskInput } from "./task-request";
+import {
+  BoundedRequestBodyError,
+  parseTaskInput,
+  readBoundedJson,
+} from "./task-request";
 
 test("accepts the full set of optional planner metadata", async () => {
   const parsed = await parseTaskInput(new Request("https://example.com/api/tasks", {
@@ -51,4 +55,48 @@ test("rejects invalid numeric hours and unsupported metadata", async () => {
     body: JSON.stringify({ title: "Lab", peopleInstructorIds: ["notion-id"] }),
   }));
   assert.deepEqual(unsupported, { ok: false, error: "The request contains an unsupported field." });
+});
+
+test("reads JSON within the configured byte limit", async () => {
+  const request = new Request("https://example.com", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ok: true }),
+  });
+  assert.deepEqual(await readBoundedJson(request, 100), { ok: true });
+});
+
+test("rejects declared and streamed oversized JSON with status 413", async () => {
+  const declared = new Request("https://example.com", {
+    method: "POST",
+    headers: { "Content-Length": "1000" },
+    body: "{}",
+  });
+  await assert.rejects(
+    readBoundedJson(declared, 10),
+    (error: unknown) => error instanceof BoundedRequestBodyError && error.status === 413,
+  );
+
+  const streamed = new Request("https://example.com", {
+    method: "POST",
+    body: new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('{"value":"too large"}'));
+        controller.close();
+      },
+    }),
+    duplex: "half",
+  } as RequestInit & { duplex: "half" });
+  await assert.rejects(
+    readBoundedJson(streamed, 5),
+    (error: unknown) => error instanceof BoundedRequestBodyError && error.status === 413,
+  );
+});
+
+test("returns a client error for malformed JSON", async () => {
+  const request = new Request("https://example.com", { method: "POST", body: "not json" });
+  await assert.rejects(
+    readBoundedJson(request, 100),
+    (error: unknown) => error instanceof BoundedRequestBodyError && error.status === 400,
+  );
 });

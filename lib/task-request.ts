@@ -1,5 +1,55 @@
 import type { CreateTaskInput } from "@/lib/notion";
 
+export class BoundedRequestBodyError extends Error {
+  constructor(readonly status: 400 | 413, message: string) {
+    super(message);
+    this.name = "BoundedRequestBodyError";
+  }
+}
+
+export async function readBoundedJson(request: Request, maximumBytes: number): Promise<unknown> {
+  const contentLength = Number(request.headers.get("content-length"));
+  if (Number.isFinite(contentLength) && contentLength > maximumBytes) {
+    throw new BoundedRequestBodyError(413, "The request body is too large.");
+  }
+  if (!Number.isInteger(maximumBytes) || maximumBytes < 1) {
+    throw new Error("The request body size limit is invalid.");
+  }
+  const reader = request.body?.getReader();
+  if (!reader) throw new BoundedRequestBodyError(400, "Send a valid JSON request body.");
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > maximumBytes) {
+        await reader.cancel();
+        throw new BoundedRequestBodyError(413, "The request body is too large.");
+      }
+      chunks.push(value);
+    }
+  } catch (error) {
+    if (error instanceof BoundedRequestBodyError) throw error;
+    throw new BoundedRequestBodyError(400, "Send a valid JSON request body.");
+  } finally {
+    reader.releaseLock();
+  }
+
+  try {
+    const bytes = new Uint8Array(size);
+    let offset = 0;
+    for (const chunk of chunks) {
+      bytes.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    return JSON.parse(new TextDecoder().decode(bytes)) as unknown;
+  } catch {
+    throw new BoundedRequestBodyError(400, "Send a valid JSON request body.");
+  }
+}
+
 export function isSameOrigin(request: Request): boolean {
   const origin = request.headers.get("origin");
   const hosts = [request.headers.get("host"), request.headers.get("x-forwarded-host")]
