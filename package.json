@@ -13,7 +13,7 @@
   "dependencies": {
     "@clerk/nextjs": "^7.9.9",
     "@google/genai": "^2.31.0",
-    "@sentry/nextjs": "^11.8.0",
+    "@sentry/nextjs": "^11.9.0",
     "exceljs": "^4.4.0",
     "lucide-react": "^0.468.0",
     "mammoth": "^1.13.0",
