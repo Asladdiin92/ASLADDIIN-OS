@@ -26,6 +26,7 @@ import {
   Pencil,
   Plus,
   RefreshCw,
+  Scan,
   Search,
   Sparkles,
   StickyNote,
@@ -48,6 +49,8 @@ import { DailyBriefingPanel } from "@/components/daily-briefing";
 import { RecentActivityTimeline } from "@/components/recent-activity-timeline";
 import { MetricsGrid } from "@/components/dashboard-metrics";
 import { ProviderIntegrations } from "@/components/provider-integrations";
+import { ContactsView } from "@/components/contacts-view";
+import { CloudVisionView } from "@/components/cloud-vision-view";
 import { GoogleConnectionCard, GoogleWorkspacePage, WorkspaceAttention } from "@/components/google-workspace";
 import type { Task, TaskOptions, TasksResponse } from "@/lib/types";
 import type { GoogleWorkspaceSummary } from "@/lib/google-types";
@@ -83,7 +86,7 @@ const emptyGoogleSummary: GoogleWorkspaceSummary = {
   files: [],
 };
 const dashboardTabs = [
-  "overview", "planner-assistant", "tasks", "projects", "notes", "calendar", "progress", "integrations", "google-workspace",
+  "overview", "planner-assistant", "tasks", "projects", "notes", "calendar", "progress", "integrations", "google-workspace", "contacts", "cloud-vision",
   "goals", "knowledge", "system-activity", "completed-work", "project-progress", "reviews", "ai-observations",
   "appearance", "notifications", "privacy", "authentication", "ai-preferences", "integration-permissions", "data-controls",
 ];
@@ -166,6 +169,7 @@ function Sidebar({
   taskCount,
   projectCount,
   meetingCount,
+  contactsCount,
 }: {
   onClose?: () => void;
   activeTarget: string;
@@ -173,6 +177,7 @@ function Sidebar({
   taskCount: number;
   projectCount: number;
   meetingCount: number;
+  contactsCount: number;
 }) {
   const clerk = useClerk();
   const navigationGroups: SidebarNavigationGroup[] = [
@@ -191,6 +196,8 @@ function Sidebar({
         { id: "projects", label: "Projects", icon: GitBranch, target: "projects", count: projectCount, badge: "projects-badge" },
         { id: "calendar", label: "Calendar", icon: CalendarDays, target: "calendar", count: meetingCount, badge: "calendar-badge" },
         { id: "google-workspace", label: "Google Workspace", icon: Mail, target: "google-workspace" },
+        { id: "contacts", label: "Contacts", icon: UserRound, target: "contacts", count: contactsCount, badge: "projects-badge" },
+        { id: "cloud-vision", label: "Cloud Vision", icon: Scan, target: "cloud-vision" },
         { id: "goals", label: "Goals", icon: Target, target: "goals" },
         { id: "knowledge", label: "Knowledge", icon: BookOpen, target: "knowledge" },
       ],
@@ -756,6 +763,7 @@ export default function DashboardPage() {
   const [activityRefreshKey, setActivityRefreshKey] = useState(0);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("overview");
+  const [contactsCount, setContactsCount] = useState(0);
   const [requestDayPlan, setRequestDayPlan] = useState(false);
   const [toast, setToast] = useState<{ message: string; tone: "success" | "error" | "info" } | null>(null);
   const [archiveTask, setArchiveTask] = useState<Task | null>(null);
@@ -1065,6 +1073,8 @@ export default function DashboardPage() {
     "planner-assistant": "AI Assistant",
     integrations: "Integrations",
     "google-workspace": "Google Workspace",
+    contacts: "Contacts",
+    "cloud-vision": "Cloud Vision",
     goals: "Goals",
     knowledge: "Knowledge",
     "system-activity": "System activity",
@@ -1166,7 +1176,7 @@ export default function DashboardPage() {
   return (
     <div className="app-shell" id="overview">
       <div className={`sidebar-wrap${sidebarOpen ? " sidebar-open" : ""}`}><Sidebar activeTarget={activeTab} onSelectTarget={selectTab} onClose={() => setSidebarOpen(false)}
-        taskCount={myDayTaskCount} projectCount={areaData.length} meetingCount={meetingsToday} /></div>
+        taskCount={myDayTaskCount} projectCount={areaData.length} meetingCount={meetingsToday} contactsCount={contactsCount} /></div>
       {sidebarOpen && <button className="sidebar-overlay" onClick={() => setSidebarOpen(false)} aria-label="Close navigation" />}
       <main className="main-content">
         <header className="topbar">
@@ -1327,6 +1337,14 @@ export default function DashboardPage() {
               onRefresh={(showToast) => void loadGoogleSummary(showToast)}
               onOpenIntegrations={() => selectTab("integrations")}
             />
+          </div>
+
+          <div className={`tab-content${activeTab === "contacts" ? " is-active" : ""}`} id="contacts-tab" role="region" aria-labelledby="nav-contacts" aria-hidden={activeTab !== "contacts"}>
+            <ContactsView onNotify={notify} onContactsCountChange={setContactsCount} />
+          </div>
+
+          <div className={`tab-content${activeTab === "cloud-vision" ? " is-active" : ""}`} id="cloud-vision-tab" role="region" aria-labelledby="nav-cloud-vision" aria-hidden={activeTab !== "cloud-vision"}>
+            <CloudVisionView onNotify={notify} onTaskCreated={handleAssistantTaskSaved} />
           </div>
 
           <div className={`tab-content${activeTab === "progress" ? " is-active" : ""}`} id="progress-tab" role="region" aria-labelledby="nav-progress" aria-hidden={activeTab !== "progress"}>

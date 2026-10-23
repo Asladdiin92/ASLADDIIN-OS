@@ -5,6 +5,7 @@ import { logActivity } from "@/lib/activity-logger";
 import { analyzeImageWithVision } from "@/lib/cloud-vision";
 import {
   listVisionAnalyses,
+  deleteVisionAnalysis,
   saveVisionAnalysis,
   serializeVisionAnalysis,
   VISION_FEATURES,
@@ -103,7 +104,7 @@ export async function POST(request: NextRequest) {
       type: "vision_analyzed",
       source: "dashboard",
       title: "Analyzed an image",
-      entityType: "vision_analysis",
+      entityType: "vision",
       entityId: saved.analysisId,
     });
     return json({ ok: true, analysis: serializeVisionAnalysis(saved) }, 201);
@@ -113,5 +114,36 @@ export async function POST(request: NextRequest) {
       ? 400
       : /GEMINI_API_KEY/.test(message) ? 503 : 502;
     return json({ ok: false, error: message }, status);
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  const access = await authorizedUser();
+  if (access.error) return access.error;
+  if (!isSameOrigin(request)) {
+    return json({ ok: false, error: "This request must come from the dashboard." }, 403);
+  }
+  let body: unknown;
+  try {
+    body = await readBoundedJson(request, 8 * 1024);
+  } catch (error) {
+    if (error instanceof BoundedRequestBodyError) {
+      return json({ ok: false, error: error.message }, error.status);
+    }
+    return json({ ok: false, error: "Send a valid scan deletion request." }, 400);
+  }
+  if (!isPlainObject(body) ||
+      Object.keys(body).some((key) => key !== "analysisId") ||
+      typeof body.analysisId !== "string" ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(body.analysisId)) {
+    return json({ ok: false, error: "The scan deletion request is invalid." }, 400);
+  }
+  try {
+    const deleted = await deleteVisionAnalysis(access.userId, body.analysisId);
+    return deleted
+      ? json({ ok: true, deleted: true })
+      : json({ ok: false, error: "Saved scan was not found." }, 404);
+  } catch {
+    return json({ ok: false, error: "Saved scan could not be deleted." }, 503);
   }
 }

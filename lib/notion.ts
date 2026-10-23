@@ -464,7 +464,12 @@ function addTextProperty(
   if (!name || properties[name]?.type !== "rich_text") {
     throw new Error(`The Notion database does not have a text property named "${process.env[variable] || fallback}".`);
   }
-  target[name] = { rich_text: [{ text: { content: value } }] };
+  const characters = Array.from(value);
+  const richText: Array<{ text: { content: string } }> = [];
+  for (let offset = 0; offset < characters.length; offset += 2_000) {
+    richText.push({ text: { content: characters.slice(offset, offset + 2_000).join("") } });
+  }
+  target[name] = { rich_text: richText };
 }
 
 export async function createNotionTask(input: CreateTaskInput): Promise<Task> {
@@ -557,8 +562,9 @@ export async function archiveNotionTask(pageId: string): Promise<void> {
 
 function validateInputLengths(input: CreateTaskInput): void {
   for (const [label, value] of Object.entries(input)) {
-    if (typeof value === "string" && value.length > 2000) {
-      throw new Error(`${label} must be 2,000 characters or fewer.`);
+    const maximumLength = label === "notes" ? 50_000 : 2_000;
+    if (typeof value === "string" && value.length > maximumLength) {
+      throw new Error(`${label} must be ${maximumLength.toLocaleString("en")} characters or fewer.`);
     }
   }
 }

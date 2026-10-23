@@ -41,6 +41,22 @@ test("accepts the full set of optional planner metadata", async () => {
   }
 });
 
+test("accepts OCR notes up to 50,000 characters and rejects longer notes", async () => {
+  const valid = await parseTaskInput(new Request("https://example.com/api/tasks", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title: "OCR result", notes: "x".repeat(50_000) }),
+  }));
+  assert.equal(valid.ok, true);
+
+  const invalid = await parseTaskInput(new Request("https://example.com/api/tasks", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title: "OCR result", notes: "x".repeat(50_001) }),
+  }));
+  assert.deepEqual(invalid, { ok: false, error: "Invalid notes value." });
+});
+
 test("rejects invalid numeric hours and unsupported metadata", async () => {
   const invalidHours = await parseTaskInput(new Request("https://example.com/api/tasks", {
     method: "POST",

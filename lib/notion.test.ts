@@ -3,6 +3,7 @@ import test from "node:test";
 
 process.env.NOTION_API_KEY ??= "notion-test-token";
 process.env.NOTION_DATABASE_ID ??= "notion-test-database";
+process.env.NOTION_NOTES_PROPERTY = "Notes";
 
 let notion: typeof import("./notion");
 test.before(async () => {
@@ -124,6 +125,24 @@ test("creates a task using schema-aware defaults when fields are omitted", async
   assert.deepEqual(properties.Status, { status: { name: "Planned" } });
   assert.deepEqual(properties.Priority, { select: { name: "Medium" } });
   assert.equal(task.title, "Read chapter");
+});
+
+test("stores long OCR notes as Notion-sized rich-text fragments", async () => {
+  const notes = `${"a".repeat(1_999)}😀${"b".repeat(2_001)}`;
+  let createBody: Record<string, unknown> = {};
+  mockNotion(page({
+    Item: { type: "title", title: [{ plain_text: "OCR result" }] },
+    Type: { type: "select", select: { name: "Task" } },
+    Status: { type: "status", status: { name: "Planned" } },
+    Notes: { type: "rich_text", rich_text: [{ plain_text: notes }] },
+  }), (_url, _init, body) => { createBody = body; });
+
+  await notion.createNotionTask({ title: "OCR result", notes });
+  const properties = createBody.properties as Record<string, { rich_text: Array<{ text: { content: string } }> }>;
+  const chunks = properties.Notes.rich_text.map((item) => item.text.content);
+  assert.ok(chunks.length > 1);
+  assert.ok(chunks.every((chunk) => Array.from(chunk).length <= 2_000));
+  assert.equal(chunks.join(""), notes);
 });
 
 test("loads assessment choices from the Notion database schema", async () => {

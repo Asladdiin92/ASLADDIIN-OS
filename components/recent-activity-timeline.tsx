@@ -87,6 +87,8 @@ const ENTITY_TABS: Record<string, { tab: string; label: string }> = {
   project: { tab: "projects", label: "View projects" },
   note: { tab: "notes", label: "View notes" },
   meeting: { tab: "calendar", label: "View calendar" },
+  contact: { tab: "contacts", label: "View contacts" },
+  vision: { tab: "cloud-vision", label: "View Cloud Vision" },
 };
 
 function relativeTime(value: string): string {

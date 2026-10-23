@@ -88,7 +88,9 @@ export async function parseTaskInput(request: Request) {
       "resourceLink", "semester", "timeBlock", "venueLink", "dueDate", "dateEnd",
       "nextAction",
     ] as const) {
-      if (values[name] !== undefined && (typeof values[name] !== "string" || values[name].length > 2000)) {
+      const maximumLength = name === "notes" ? 50_000 : 2_000;
+      if (values[name] !== undefined &&
+          (typeof values[name] !== "string" || values[name].length > maximumLength)) {
         return { ok: false as const, error: `Invalid ${name} value.` };
       }
     }
