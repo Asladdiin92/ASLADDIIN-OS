@@ -464,7 +464,10 @@ async function callGeminiVision(
 export async function analyzeImageWithVision(
   input: VisionAnalysisInput,
 ): Promise<Omit<StoredVisionAnalysis, "_id" | "analysisId" | "userId" | "createdAt">> {
-  const image = validateVisionImageInput(input?.image);
+  if (!input || typeof input !== "object") {
+    throw new Error("Provide valid vision analysis input.");
+  }
+  const image = validateVisionImageInput(input.image);
   const features = validateFeatures(input.features);
   validateMetadata(input);
   if (image.kind === "url") await ensurePublicResolution(image.imageUrl);

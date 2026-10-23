@@ -2,7 +2,7 @@ import type { Task } from "@/lib/types";
 
 const NOTION_VERSION = "2022-06-28";
 const NOTION_API = "https://api.notion.com/v1";
-const TASK_CACHE_TTL_MS = 10_000;
+const TASK_CACHE_TTL_MS = 60_000;
 
 type NotionValue = {
   type?: string;

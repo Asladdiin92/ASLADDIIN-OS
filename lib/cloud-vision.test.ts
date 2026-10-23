@@ -83,7 +83,10 @@ test("uses Cloud Vision when configured and normalizes annotations", async () =>
     assert.equal(result.labelAnnotations[0]?.description, "Office");
     assert.equal(result.fullTextAnnotation?.text, "Project board");
     assert.equal(JSON.stringify(requestBody).includes("data:image"), false);
-    assert.equal(((requestBody?.requests as Array<{ image: { content?: string } }>)[0]).image.content, "YQ==");
+    assert.equal(
+      (requestBody?.requests as Array<{ image: { content?: string } }> | undefined)?.[0]?.image?.content,
+      "YQ==",
+    );
   } finally {
     globalThis.fetch = originalFetch;
     if (previousKey === undefined) delete process.env.GOOGLE_CLOUD_VISION_API_KEY;

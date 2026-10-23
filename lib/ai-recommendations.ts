@@ -117,31 +117,24 @@ export async function storeRecommendation(
   now = new Date(),
 ): Promise<StoredRecommendation | null> {
   const collection = await recommendationCollection();
-  const existing = await collection.findOne({ userId, taskId: recommendation.taskId });
-  if (existing?.status === "dismissed") return null;
-  const record: Omit<StoredRecommendation, "_id"> = {
-    ...recommendation,
-    userId,
-    status: "active",
-    createdAt: existing?.createdAt ?? now,
-    updatedAt: now,
-  };
   try {
-    await collection.updateOne(
+    return await collection.findOneAndUpdate(
       { userId, taskId: recommendation.taskId, status: { $ne: "dismissed" } },
       {
-        $set: record,
-        $setOnInsert: { _id: new ObjectId() },
+        $set: {
+          ...recommendation,
+          userId,
+          status: "active",
+          updatedAt: now,
+        },
+        $setOnInsert: { _id: new ObjectId(), createdAt: now },
       },
-      { upsert: true },
+      { upsert: true, returnDocument: "after" },
     );
   } catch (error) {
     if (!error || typeof error !== "object" || !("code" in error) || error.code !== 11000) throw error;
-    const latest = await collection.findOne({ userId, taskId: recommendation.taskId });
-    if (latest?.status === "dismissed") return null;
-    throw new Error("Recommendation could not be saved.");
+    return null;
   }
-  return collection.findOne({ userId, taskId: recommendation.taskId });
 }
 
 export async function dismissRecommendation(userId: string, recommendationId: string, now = new Date()): Promise<boolean> {

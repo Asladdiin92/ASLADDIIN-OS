@@ -25,7 +25,13 @@ type AIKnowledgeDocument = Document & {
   metadata?: AIKnowledgeMetadata;
 };
 
-type TaskMemoryCollection = Pick<Collection<AIKnowledgeDocument>, "findOne" | "insertOne" | "updateOne">;
+type TaskMemoryCollection =
+  Pick<Collection<AIKnowledgeDocument>, "findOne" | "insertOne" | "updateOne"> &
+  Partial<Pick<Collection<AIKnowledgeDocument>, "find" | "bulkWrite">>;
+
+const SHADOW_SYNC_INTERVAL_MS = 5 * 60_000;
+let lastShadowSyncAt = 0;
+let shadowSyncInFlight: Promise<void> | undefined;
 
 export function buildTaskShadowMemory(task: Task): AIKnowledgeDocument {
   const updatedAt = new Date(task.updatedAt ?? task.createdAt);
@@ -92,17 +98,59 @@ async function upsertNewerTaskMemory(
   }
 }
 
-export async function syncTasksToShadowMemory(tasks: Task[]): Promise<void> {
+export async function syncTasksToShadowMemory(tasks: Task[], force = false): Promise<void> {
   if (!process.env.MONGO_URI?.trim() || tasks.length === 0) return;
-  try {
-    const collection = (await getAIDatabase()).collection<AIKnowledgeDocument>("ai_knowledge");
-    for (const task of tasks) {
-      await upsertNewerTaskMemory(collection, buildTaskShadowMemory(task));
+  if (shadowSyncInFlight) return shadowSyncInFlight;
+  if (!force && Date.now() - lastShadowSyncAt < SHADOW_SYNC_INTERVAL_MS) return;
+
+  const sync = (async () => {
+    lastShadowSyncAt = Date.now();
+    try {
+      const documents = tasks.map(buildTaskShadowMemory);
+      const collection = (await getAIDatabase()).collection<AIKnowledgeDocument>("ai_knowledge");
+      if (!collection.bulkWrite) {
+        for (const document of documents) {
+          await upsertNewerTaskMemory(collection, document);
+        }
+        return;
+      }
+
+      const sourceIds = documents.flatMap((document) =>
+        document.sourceId ? [document.sourceId] : []
+      );
+      const existingRecords = await collection.find!({
+        type: "notion_task_shadow",
+        sourceId: { $in: sourceIds },
+      }, { projection: { sourceId: 1, updatedAt: 1 } }).toArray();
+      const existingBySourceId = new Map(
+        existingRecords.flatMap((record) =>
+          record.sourceId ? [[record.sourceId, record.updatedAt] as const] : []
+        ),
+      );
+      const changedDocuments = documents.filter((document) =>
+        document.sourceId &&
+        shouldSyncTaskShadowMemory(existingBySourceId.get(document.sourceId), document.updatedAt)
+      );
+      if (changedDocuments.length === 0) return;
+
+      await collection.bulkWrite(changedDocuments.map((document) => ({
+        updateOne: {
+          filter: { type: "notion_task_shadow", sourceId: document.sourceId },
+          update: { $set: document },
+          upsert: true,
+        },
+      })));
+    } catch (error) {
+      console.warn("Notion task shadow sync was skipped.", {
+        errorName: error instanceof Error ? error.name : "UnknownError",
+      });
     }
-  } catch (error) {
-    console.warn("Notion task shadow sync was skipped.", {
-      errorName: error instanceof Error ? error.name : "UnknownError",
-    });
+  })();
+  shadowSyncInFlight = sync;
+  try {
+    await sync;
+  } finally {
+    if (shadowSyncInFlight === sync) shadowSyncInFlight = undefined;
   }
 }
 

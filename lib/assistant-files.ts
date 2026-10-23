@@ -66,7 +66,7 @@ function validateOfficeArchive(bytes: Buffer): void {
   const entryCount = bytes.readUInt16LE(endRecord + 10);
   const directorySize = bytes.readUInt32LE(endRecord + 12);
   const directoryOffset = bytes.readUInt32LE(endRecord + 16);
-  if (entryCount > MAX_OFFICE_ARCHIVE_ENTRIES || entryCount === 0xffff ||
+  if (entryCount > MAX_OFFICE_ARCHIVE_ENTRIES ||
       directorySize === 0xffffffff || directoryOffset === 0xffffffff ||
       directoryOffset + directorySize > endRecord) {
     throw new Error("That Office document is too complex or uses an unsupported archive format.");

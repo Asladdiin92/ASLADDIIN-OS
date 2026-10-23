@@ -85,9 +85,10 @@ export async function POST(request: NextRequest) {
       getDismissedRecommendationTaskIds(userId),
     ]);
     const ranked = rankTasks(tasks, dismissed, now, PLANNER_TIME_ZONE);
+    const topRanked = ranked.slice(0, 1);
     const currentRecommendations = await getCurrentRecommendations(
       userId,
-      ranked.map((scored) => ({
+      topRanked.map((scored) => ({
         taskId: scored.task.id,
         taskFingerprint: taskRecommendationFingerprint(scored.task),
       })),
@@ -105,7 +106,7 @@ export async function POST(request: NextRequest) {
       timeZoneName: "short",
     }).format(now);
 
-    for (const scored of ranked) {
+    for (const scored of topRanked) {
       const fingerprint = taskRecommendationFingerprint(scored.task);
       const saved = currentRecommendations.get(scored.task.id);
       if (saved && saved.score === scored.score &&
